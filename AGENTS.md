@@ -9,7 +9,18 @@ Android-приложение «Обход домов» — автономный 
 этажи → квартиры с визуальной схемой подъезда (плитки квартир с цветовыми статусами).
 Реализовано по ТЗ v3.0 (полный ТЗ был в диалоге 2026-11-12; краткая версия требований — README.md).
 Работает полностью офлайн, все данные локально (Room). minSdk 26, target/compile 35.
-Пакет: `ru.obkhod.app`. Git-репозитория нет.
+Пакет: `ru.obkhod.app`. Репозиторий: https://github.com/mkisten/moy-uchastok (gh CLI залогинен как mkisten).
+
+## Обновления и релизы
+
+- Проверка обновлений: `update/UpdateChecker.kt` — при открытии главного экрана (Dispatchers.IO)
+  запрашивает GitHub API releases/latest, сравнивает tag_name (v1.2.3) с BuildConfig.VERSION_NAME
+  через isNewer (SemVer); если новее — AlertDialog «Доступно обновление» с changelog и кнопкой
+  «Обновить» (ACTION_VIEW на browser_download_url APK-ассета). INTERNET permission добавлен
+  только для этого; ошибки сети тихо игнорируются.
+- Процесс релиза: поднять versionCode/versionName в app/build.gradle.kts → assembleRelease →
+  commit/push → `gh release create vX.Y.Z app/build/outputs/apk/release/app-release.apk
+  --title ... --notes ...`. Подробно в README.md. Текущая версия: 1.0.1 (versionCode 2).
 
 ## Стек и ключевые версии
 
