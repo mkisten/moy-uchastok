@@ -81,6 +81,8 @@ data class ApartmentEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long? = null,
+    /** В квартире/доме есть ребёнок (отметка для обхода). */
+    val hasChild: Boolean = false,
 )
 
 @Entity(

@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         AreaEntity::class, EntranceEntity::class, FloorEntity::class,
         ApartmentEntity::class, VisitHistoryEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -57,11 +57,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v4 → v5: отметка «есть ребёнок» у квартиры. */
+        private val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE apartments ADD COLUMN hasChild INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext, AppDatabase::class.java, "obkhod.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
             }
     }
 }

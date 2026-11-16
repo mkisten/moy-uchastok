@@ -124,12 +124,12 @@ class EntranceRepository(private val db: AppDatabase) {
         }
     }
 
-    /** Заметка (телефон/комментарий) — не меняет статус и дату обхода (п. 8). */
-    suspend fun saveNote(apartmentId: Long, phone: String?, comment: String?) {
+    /** Заметка (телефон/комментарий) и отметка «ребёнок» — не меняют статус и дату обхода (п. 8). */
+    suspend fun saveNote(apartmentId: Long, phone: String?, comment: String?, hasChild: Boolean) {
         val apt = apartmentDao.getById(apartmentId) ?: return
         val p = phone?.trim()?.takeIf { it.isNotEmpty() }
         val c = comment?.trim()?.takeIf { it.isNotEmpty() }
-        apartmentDao.update(apt.copy(phone = p, comment = c, updatedAt = System.currentTimeMillis()))
+        apartmentDao.update(apt.copy(phone = p, comment = c, hasChild = hasChild, updatedAt = System.currentTimeMillis()))
     }
 
     /** Перемещение квартиры на другой этаж (п. 11). Возвращает ошибку или null. */
@@ -391,6 +391,7 @@ fun ApartmentEntity.toUi(floorNumber: Int, visitedIds: Set<Long>) = ApartmentUi(
     floorNumber = floorNumber,
     status = Status.valueOf(status),
     hasNote = !phone.isNullOrBlank() || !comment.isNullOrBlank(),
+    hasChild = hasChild,
     phone = phone,
     comment = comment,
     lastVisitAt = lastVisitAt,

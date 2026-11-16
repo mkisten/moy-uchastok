@@ -56,6 +56,7 @@ data class ApartmentUi(
     val hasNote: Boolean,
     val phone: String?,
     val comment: String?,
+    val hasChild: Boolean,
     val lastVisitAt: Long?,
     val hasVisits: Boolean,
 )

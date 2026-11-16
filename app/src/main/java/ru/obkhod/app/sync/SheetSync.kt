@@ -128,6 +128,7 @@ class SheetSync(
             val lastVisitAt = row.getOrNull(8)?.toLongOrNull()
             val deleted = (row.getOrNull(9) ?: "") == "1"
             val updatedAt = row.getOrNull(10)?.toLongOrNull() ?: 0L
+            val remoteHasChild = (row.getOrNull(12) ?: "") == "1"
 
             val local = apartmentUuidToLocal[uuid]
             if (local == null) {
@@ -161,6 +162,7 @@ class SheetSync(
                             comment = comment,
                             lastVisitAt = lastVisitAt ?: local.lastVisitAt,
                             deletedAt = if (deleted) (local.deletedAt ?: now) else local.deletedAt,
+                            hasChild = remoteHasChild,
                             updatedAt = updatedAt,
                         )
                     )
@@ -227,6 +229,7 @@ class SheetSync(
                         a.lastVisitAt?.toString() ?: "",
                         if (a.deletedAt != null) "1" else "0",
                         a.updatedAt.toString(),
+                        if (a.hasChild) "1" else "0",
                         updatedBy,
                     )
                 )

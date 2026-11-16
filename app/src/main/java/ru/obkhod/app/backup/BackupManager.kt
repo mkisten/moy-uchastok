@@ -101,6 +101,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                     put("lastVisitAt", a.lastVisitAt ?: JSONObject.NULL)
                     put("createdAt", a.createdAt); put("updatedAt", a.updatedAt)
                     put("deletedAt", a.deletedAt ?: JSONObject.NULL)
+                    put("hasChild", a.hasChild)
                 })
             }
         })
@@ -213,6 +214,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                         lastVisitAt = o.optLongOrNull("lastVisitAt"),
                         createdAt = o.getLong("createdAt"), updatedAt = o.getLong("updatedAt"),
                         deletedAt = o.optLongOrNull("deletedAt"),
+                        hasChild = o.optBoolean("hasChild", false),
                     )
                 )
             }

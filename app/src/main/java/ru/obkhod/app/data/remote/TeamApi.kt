@@ -88,7 +88,7 @@ class TeamApi(private val context: Context) {
 
     private fun toApartmentsHeaders() = listOf(
         "uuid", "entrance_uuid", "floor_uuid", "number", "label", "status",
-        "phone", "comment", "lastVisitAt", "deleted", "updated_at", "updated_by",
+        "phone", "comment", "lastVisitAt", "deleted", "hasChild", "updated_at", "updated_by",
     )
     private fun toHistoryHeaders() = listOf(
         "uuid", "apartment_uuid", "visitDate", "previousStatus", "newStatus", "comment", "eventType", "updated_by",

@@ -152,6 +152,7 @@ class YandexSync(
                             comment = optStringOrNull(o, "comment"),
                             lastVisitAt = optLongOrNull(o, "lastVisitAt") ?: local.lastVisitAt,
                             deletedAt = optLongOrNull(o, "deletedAt") ?: local.deletedAt,
+                            hasChild = o.optBoolean("hasChild", local.hasChild),
                             updatedAt = updatedAt,
                         )
                     )

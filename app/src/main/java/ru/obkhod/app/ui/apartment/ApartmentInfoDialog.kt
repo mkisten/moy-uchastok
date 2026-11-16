@@ -50,6 +50,8 @@ data class ApartmentInfo(
     val number: Int,
     /** Отображаемый номер (может быть текстовым, «1А»). */
     val label: String,
+    /** Есть ребёнок. */
+    val hasChild: Boolean,
     val entranceNumber: Int,
     val floorNumber: Int,
     val status: Status,
@@ -80,6 +82,9 @@ fun ApartmentInfoDialog(
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Подъезд: ${info.entranceNumber} · Этаж: ${info.floorNumber}")
                 Text("Статус: ${statusLabel(info.status)}")
+                if (info.hasChild) {
+                    Text("👶 В квартире есть ребёнок", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary)
+                }
                 Text("Последний обход: ${formatDateTime(info.lastVisitAt)}")
                 if (!info.phone.isNullOrBlank()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

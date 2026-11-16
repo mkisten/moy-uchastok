@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -84,7 +85,7 @@ fun EntranceScreen(
     onBack: () -> Unit,
     onSetStatus: (Long, Status, Boolean) -> Unit,
     onResetStatus: (Long) -> Unit,
-    onSaveNote: (Long, String?, String?) -> Unit,
+    onSaveNote: (Long, String?, String?, Boolean) -> Unit,
     onMove: (Long, Long, (String?) -> Unit) -> Unit,
     onDelete: (Long) -> Unit,
     onRestore: (Long) -> Unit = {},
@@ -527,7 +528,7 @@ fun EntranceScreen(
             apartment = apt,
             isPrivate = isPrivate,
             onDismiss = { noteFor = null },
-            onSave = { phone, comment -> onSaveNote(apt.id, phone, comment); noteFor = null },
+            onSave = { phone, comment, hasChild -> onSaveNote(apt.id, phone, comment, hasChild); noteFor = null },
         )
     }
 
@@ -742,23 +743,35 @@ private fun ApartmentTile(
                 )
             },
     ) {
-        // Телефон цифрами — кружок с трубкой в центре плитки (декоративный, неактивный)
-        val numericPhone = apartment.phone?.matches(Regex("[0-9]{5,}")) == true
+        // Телефон записан цифрами — маленькая неактивная трубка в кружке слева сверху
+        val numericPhone = apartment.phone?.matches(Regex("[0-9()+-]{5,}")) == true
         if (numericPhone) {
             Box(
                 Modifier
-                    .align(Alignment.Center)
-                    .size(34.dp)
-                    .background(Color.White.copy(alpha = 0.78f), androidx.compose.foundation.shape.CircleShape),
+                    .align(Alignment.TopStart)
+                    .size(16.dp)
+                    .background(Color.White.copy(alpha = 0.8f), androidx.compose.foundation.shape.CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     Icons.Default.Call,
                     contentDescription = "Есть телефон",
-                    modifier = Modifier.size(17.dp),
+                    modifier = Modifier.size(11.dp),
                     tint = Color(0xFF1B5E20),
                 )
             }
+        }
+        // Отметка «ребёнок» — слева снизу
+        if (apartment.hasChild) {
+            Icon(
+                Icons.Default.ChildCare,
+                contentDescription = "Есть ребёнок",
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .size(13.dp)
+                    .padding(1.dp),
+                tint = Color(0xFFEF6C00),
+            )
         }
         Text(
             apartment.label,
@@ -809,10 +822,11 @@ private fun NoteDialog(
     apartment: ApartmentUi?,
     isPrivate: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (String?, String?) -> Unit,
+    onSave: (String?, String?, Boolean) -> Unit,
 ) {
     var phone by remember { mutableStateOf(apartment?.phone ?: "") }
     var comment by remember { mutableStateOf(apartment?.comment ?: "") }
+    var hasChild by remember { mutableStateOf(apartment?.hasChild ?: false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isPrivate) "Заметка — дом № ${apartment?.label ?: ""}" else "Заметка — квартира № ${apartment?.label ?: ""}") },
@@ -831,7 +845,11 @@ private fun NoteDialog(
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(phone.ifBlank { null }, comment.ifBlank { null }) }) { Text("Сохранить") } },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(phone.ifBlank { null }, comment.ifBlank { null }, hasChild)
+            }) { Text("Сохранить") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }
@@ -860,22 +878,34 @@ private fun HouseTile(
                 onClick = onTap,
             ),
     ) {
-        val numericHousePhone = house.phone?.matches(Regex("[0-9]{5,}")) == true
+        val numericHousePhone = house.phone?.matches(Regex("[0-9()+-]{5,}")) == true
         if (numericHousePhone) {
             Box(
                 Modifier
-                    .align(Alignment.Center)
-                    .size(40.dp)
-                    .background(Color.White.copy(alpha = 0.78f), androidx.compose.foundation.shape.CircleShape),
+                    .align(Alignment.TopStart)
+                    .size(16.dp)
+                    .background(Color.White.copy(alpha = 0.8f), androidx.compose.foundation.shape.CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     Icons.Default.Call,
                     contentDescription = "Есть телефон",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(11.dp),
                     tint = Color(0xFF1B5E20),
                 )
             }
+        }
+        // Отметка «ребёнок» — слева снизу
+        if (house.hasChild) {
+            Icon(
+                Icons.Default.ChildCare,
+                contentDescription = "Есть ребёнок",
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .size(14.dp)
+                    .padding(1.dp),
+                tint = Color(0xFFEF6C00),
+            )
         }
         Text(
             house.label,

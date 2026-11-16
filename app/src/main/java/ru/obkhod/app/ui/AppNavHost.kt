@@ -170,7 +170,7 @@ fun AppNavHost(
                 onBack = { nav.popBackStack() },
                 onSetStatus = { id, status, corr -> vm.setStatus(id, status, corr) },
                 onResetStatus = { vm.resetStatus(it) },
-                onSaveNote = { id, phone, comment -> vm.saveNote(id, phone, comment) },
+                onSaveNote = { id, phone, comment, hasChild -> vm.saveNote(id, phone, comment, hasChild) },
                 onMove = { id, floorId, onResult -> vm.move(id, floorId, onResult) },
                 onDelete = { vm.delete(it) },
                 onRestore = { id -> vm.restore(id) },
@@ -220,7 +220,7 @@ fun AppNavHost(
                         apartment = it,
                         isPrivate = isPrivate,
                         onDismiss = { noteForId = null },
-                        onSave = { phone, comment -> vm.saveNote(noteId, phone, comment); noteForId = null },
+                        onSave = { phone, comment, hasChild -> vm.saveNote(noteId, phone, comment, hasChild); noteForId = null },
                     )
                 }
             }
