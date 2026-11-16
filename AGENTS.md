@@ -129,7 +129,27 @@ MIGRATION_2_3) → `entrances` (CASCADE) → `floors` (CASCADE) → `apartments`
   полный: подъезд → участок → список. runBlocking в onCreate удалён. MIUI-телефон
   (FEPV9XTC4DSOTOHU) блокирует adb input injection — UI-тесты на телефоне делать руками
   пользователя, автоматизация только на BlueStacks (127.0.0.1:5555).
-  Текущая версия 1.1.0 (versionCode 5), релиз v1.1.0 на GitHub.
+  Текущая версия 1.2.0 (versionCode 6), релиз v1.2.0 на GitHub.
+
+## Синхронизация (Яндекс Диск / WebDAV, v1.2.0 — ОСНОВНОЙ способ совместного доступа)
+
+- Причина: Google OAuth Client ID требовал настройки консоли + пересборку — пользователь
+  попросил проще. WebDAV-вариант: вход логин + «пароль приложения» Яндекса прямо в приложении,
+  без регистраций и пересборок.
+- Файлы: `data/remote/WebDavClient.kt` (минимальный WebDAV GET/PUT/MKCOL/exists с Basic-auth;
+  пути с кириллицей кодируются посегментно; exists через GET т.к. PROPFIND капризен),
+  `sync/YandexSync.kt` (общий файл /Мой участок/data.json — снапшот формата бэкапа;
+  merge remote→local по uuid LWW, затем выгрузка объединённого снапшота;
+  restoreFromCloud = полная замена через BackupManager.restoreFromJson),
+  `ui/cloud/YandexSyncScreen.kt` + `YandexSyncViewModel.kt` (вход, sync now, restore, disconnect),
+  маршрут `yandex`, кнопка в настройках ПЕРВЫЙ пунктом (Google Таблица — второй, outlined).
+  BackupManager: JSON теперь содержит uuid всех строк; добавлены buildSnapshot() и
+  restoreFromJson(json) (restoreFrom(uri) → restoreFromJson).
+- Автосинхронизация при запуске: тихий LaunchedEffect в AREAS-композибле AppNavHost
+  (если в prefs yandex_sync есть login → IO sync, ошибки молча).
+- Участники: админ шарит папку «Мой участок» штатным шарингом Яндекс Диска по email;
+  участник подключает свой Яндекс-аккаунт тем же экраном. Пароль приложения создаётся
+  на id.yandex.ru → Безопасность → Пароли приложений.
 
 ## Синхронизация (Google Таблица, v1.1.0)
 

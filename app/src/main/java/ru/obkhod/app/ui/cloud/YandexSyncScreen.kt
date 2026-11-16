@@ -75,17 +75,31 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(busy = true, message = null)
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Логин без домена: Яндекс WebDAV принимает только имя аккаунта
+                val cleanLogin = login.trim()
+                    .removeSuffix("@yandex.ru").removeSuffix("@ya.ru")
+                    .removeSuffix("@yandex.by").removeSuffix("@yandex.com")
                 // Проверка доступа: читаем корень диска
-                WebDavClient("https://webdav.yandex.ru", login.trim(), appPassword.trim())
-                    .get("/").let { }
+                WebDavClient("https://webdav.yandex.ru", cleanLogin, appPassword.trim()).get("/")
                 prefs.edit()
-                    .putString("login", login.trim())
+                    .putString("login", cleanLogin)
                     .putString("app_password", appPassword.trim())
                     .apply()
-                withMain { _state.value = _state.value.copy(busy = false, connected = true, login = login.trim(), message = "Подключено к Яндекс Диску") }
+                withMain { _state.value = _state.value.copy(busy = false, connected = true, login = cleanLogin, message = "Подключено к Яндекс Диску") }
                 refresh()
+            } catch (e: WebDavClient.HttpException) {
+                withMain {
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        message = when (e.code) {
+                            401 -> "Неверный логин или пароль. Важно: основной пароль Яндекса не подходит — нужен «пароль приложения»: id.yandex.ru → Безопасность → Пароли приложений → Создать → тип «Яндекс Диск»"
+                            403 -> "Доступ запрещён: проверьте, что пароль приложения создан для Яндекс Диска"
+                            else -> "Ошибка подключения (${e.code}). Проверьте интернет-соединение"
+                        },
+                    )
+                }
             } catch (e: Exception) {
-                withMain { _state.value = _state.value.copy(busy = false, message = "Не удалось подключиться: проверьте логин и пароль приложения") }
+                withMain { _state.value = _state.value.copy(busy = false, message = "Ошибка подключения: проверьте интернет-соединение") }
             }
         }
     }
@@ -106,6 +120,17 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
                 withMain { _state.value = _state.value.copy(busy = false,
                     message = "Синхронизировано: получено ${result.pulled} записей") }
                 refresh()
+            } catch (e: WebDavClient.HttpException) {
+                withMain {
+                    _state.value = _state.value.copy(
+                        busy = false,
+                        message = if (e.code == 401) {
+                            "Доступ отклонён Яндексом (401): пароль приложения устарел или неверен. " +
+                                "Создайте новый на id.yandex.ru → Безопасность → Пароли приложений, " +
+                                "затем «Отключить» и подключитесь заново"
+                        } else "Ошибка синхронизации (${e.code}): проверьте интернет-соединение",
+                    )
+                }
             } catch (e: Exception) {
                 withMain { _state.value = _state.value.copy(busy = false, message = "Ошибка: ${e.message}") }
             }
@@ -165,15 +190,33 @@ fun YandexSyncScreen(onBack: () -> Unit) {
                 var login by remember { mutableStateOf("") }
                 var password by remember { mutableStateOf("") }
                 Text("Вход", style = MaterialTheme.typography.titleMedium)
+                // ВАЖНО: основной пароль Яндекса не подходит — только пароль приложения
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Как получить пароль:", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "1. Откройте id.yandex.ru → Безопасность\n" +
+                                "2. «Пароли приложений» → «Создать новый»\n" +
+                                "3. Тип: «Яндекс Диск»\n" +
+                                "4. Вставьте сгенерированный пароль ниже\n\n" +
+                                "Основной пароль Яндекса не подходит!",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
                 OutlinedTextField(
                     value = login, onValueChange = { login = it },
-                    label = { Text("Логин Яндекса") },
+                    label = { Text("Логин Яндекса (без @yandex.ru)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = password, onValueChange = { password = it },
                     label = { Text("Пароль приложения") },
-                    supportingText = { Text("Создаётся на id.yandex.ru → Безопасность → Пароли приложений") },
+                    supportingText = { Text("Не основной пароль — именно из шага 2 выше") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
