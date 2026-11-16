@@ -129,7 +129,12 @@ MIGRATION_2_3) → `entrances` (CASCADE) → `floors` (CASCADE) → `apartments`
   полный: подъезд → участок → список. runBlocking в onCreate удалён. MIUI-телефон
   (FEPV9XTC4DSOTOHU) блокирует adb input injection — UI-тесты на телефоне делать руками
   пользователя, автоматизация только на BlueStacks (127.0.0.1:5555).
-  Текущая версия 1.3.0 (versionCode 10), релиз v1.3.0 на GitHub.
+  Текущая версия 1.3.6 (versionCode 16), релиз v1.3.6 на GitHub.
+  Отметка «Ребёнок» (v1.3.6): ApartmentEntity.hasChild (Room v5, MIGRATION_4_5:
+  ALTER TABLE apartments ADD COLUMN hasChild INTEGER NOT NULL DEFAULT 0); чекбокс в
+  заметке (NoteDialog/NoteDialogPublic, onSaveNote — 4 аргумента с Boolean); на плитке
+  оранжевый ChildCare слева снизу; в инфо-окне строка «👶 В квартире есть ребёнок»;
+  Sheets-колонка M «hasChild» (push + pull LWW), бэкап JSON hasChild.
   ⚠ ВАЖНО (урок 2026-11-16): версии в gradle не обновлялись с 1.1.0 (python-заменки без assert
   молча не срабатывали) — релизы v1.2.0–v1.2.2 содержали бинарь 1.1.0. Теперь после каждой
   сборки проверять версию через aapt dump badging. Ассеты релизов именуются с версией
