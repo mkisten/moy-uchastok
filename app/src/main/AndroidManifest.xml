@@ -3,6 +3,8 @@
 
     <!-- Только для проверки обновлений через GitHub Releases и синхронизации через Google Таблицу -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Обновление приложения: установка скачанного APK с подтверждением пользователя -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Доступ к браузеру для OAuth (Android 11+ package visibility) -->
     <queries>

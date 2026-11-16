@@ -129,7 +129,24 @@ MIGRATION_2_3) → `entrances` (CASCADE) → `floors` (CASCADE) → `apartments`
   полный: подъезд → участок → список. runBlocking в onCreate удалён. MIUI-телефон
   (FEPV9XTC4DSOTOHU) блокирует adb input injection — UI-тесты на телефоне делать руками
   пользователя, автоматизация только на BlueStacks (127.0.0.1:5555).
-  Текущая версия 1.2.0 (versionCode 6), релиз v1.2.0 на GitHub.
+  Текущая версия 1.2.2 (versionCode 8), релиз v1.2.2 на GitHub.
+
+## Яндекс OAuth (вход через Яндекс ID, v1.2.2)
+
+- Ключи Yandex OAuth: local.properties (yandexClientId / yandexClientSecret, gitignored) →
+  BuildConfig.YANDEX_CLIENT_ID / YANDEX_CLIENT_SECRET. Client ID пользователя:
+  e55f06b094354186b9efe1973c4de627 (приложение «Мой участок», платформа Android
+  ru.obkhod.app + SHA256 debug-ключа, доступы: email/логин/портрет + Яндекс Диск чтение и запись).
+- Файл data/remote/YandexAuth.kt: authorizeUrl() = oauth.yandex.ru/authorize?response_type=code
+  &client_id=…&force_confirm=yes (страница входа Яндекса с подтверждением по телефону);
+  пользователь получает «код подтверждения» и вставляет в приложение; exchangeCode(code)
+  POST oauth.yandex.ru/token (grant_type=authorization_code, client_id+client_secret) →
+  access/refresh токены; fetchLogin через login.yandex.ru/info. accessToken() — refresh-поток.
+- WebDavClient переписан: конструктор (server, authHeader) + фабрики basic(login,password) /
+  oauth(token) — Яндекс WebDAV принимает Authorization: OAuth <token>.
+- YandexSyncScreen: OAuth-вход основной («Войти через Яндекс» → браузер → вставить код →
+  «Подтвердить код»), пароль приложения — запасной (togglePasswordForm). WebDAV-клиент
+  предпочитает OAuth-токен. Иконка сервиса для oauth.yandex.ru — icon_export/moy_uchastok_*.png.
 
 ## Синхронизация (Яндекс Диск / WebDAV, v1.2.0 — ОСНОВНОЙ способ совместного доступа)
 

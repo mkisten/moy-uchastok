@@ -202,14 +202,13 @@ fun AreasScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    // Открываем прямую ссылку на APK из релиза — браузер скачает файл
-                    context.startActivity(
-                        android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse(update.apkUrl.ifBlank { update.releasePageUrl }),
-                        )
-                    )
-                    updateInfo = null
+                    // Скачивание через системный DownloadManager + автозапуск установщика
+                    val started = ru.obkhod.app.update.UpdateInstaller.downloadAndInstall(
+                        context, update.apkUrl.ifBlank { update.releasePageUrl }, update.version,
+                    ) {
+                        updateInfo = update
+                    }
+                    if (started) updateInfo = null
                 }) { Text("Обновить") }
             },
             dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("Позже") } },
