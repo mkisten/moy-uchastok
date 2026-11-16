@@ -1,0 +1,23 @@
+# Apache POI / XmlBeans
+-dontwarn org.apache.poi.**
+-dontwarn org.apache.xmlbeans.**
+-dontwarn javax.xml.stream.**
+-dontwarn org.etsi.**
+-dontwarn org.w3.xlink.**
+-dontwarn org.w3c.**
+-dontwarn com.microsoft.**
+-keep class org.apache.poi.** { *; }
+-keep class org.apache.xmlbeans.** { *; }
+-keep class schemaorg_apache_xmlbeans.** { *; }
+-keepclassmembers class * extends org.apache.xmlbeans.impl.schema.SchemaTypeHolder { *; }
+# Room
+-keep class androidx.room.RoomDatabase { *; }
+-dontwarn org.osgi.**
+-dontwarn org.apache.logging.log4j.**
+-dontwarn org.apache.commons.compress.**
+-dontwarn org.apache.commons.io.**
+-dontwarn org.openjdk.nashorn.**
+-dontwarn org.jaxen.**
+-dontwarn org.dom4j.**
+-dontwarn org.apache.maven.**
+-dontwarn java.awt.**
