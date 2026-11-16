@@ -123,7 +123,13 @@ MIGRATION_2_3) → `entrances` (CASCADE) → `floors` (CASCADE) → `apartments`
   определяется ТОЛЬКО по lastEntranceId через areaOfEntrance() — lastAreaId мог не сохраниться
   (переход в частный сектор идёт напрямую на схему, мимо экрана участка). Авто-перенаправление
   на экране участка для PRIVATE убрано (второй источник того же тупика). См. MainActivity.
-  Текущая версия 1.0.2 (versionCode 3), релиз v1.0.2 на GitHub.
+  1.0.3: радикальное решение — старт ВСЕГДА с AREAS; восстановленный подъезд открывается
+  в LaunchedEffect AREAS-композибла (AreasViewModel.loaded + restoreApplied rememberSaveable):
+  navigate(area) → navigate(entrance) для MULTI, только entrance для PRIVATE. Back-stack
+  полный: подъезд → участок → список. runBlocking в onCreate удалён. MIUI-телефон
+  (FEPV9XTC4DSOTOHU) блокирует adb input injection — UI-тесты на телефоне делать руками
+  пользователя, автоматизация только на BlueStacks (127.0.0.1:5555).
+  Текущая версия 1.0.3 (versionCode 4), релиз v1.0.3 на GitHub.
 - **Название приложения** — «Мой участок» (strings.xml app_name + заголовок главного экрана),
   сменено с «Обход домов» по запросу пользователя 2026-11-16.
 - **Плитки квартир** (2026-11-16): уменьшены (48×44dp, колонка этажа 32dp, кнопка удаления

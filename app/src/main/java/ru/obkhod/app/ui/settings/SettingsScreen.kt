@@ -33,7 +33,7 @@ import ru.obkhod.app.ui.Routes
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null) {
+fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themeSettings by ru.obkhod.app.ui.theme.ThemePrefs.flow(context)
@@ -112,6 +112,11 @@ fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null) {
 
             HorizontalDivider()
             Text("Настройки", style = MaterialTheme.typography.titleMedium)
+
+            // Совместный доступ через общую Google-таблицу
+            Button(onClick = onOpenCloud, modifier = Modifier.fillMaxWidth()) {
+                Text("Синхронизация (Google Таблица)")
+            }
             Text("Тема", style = MaterialTheme.typography.titleMedium)
 
             // Выбор режима темы (п. 20 ТЗ)

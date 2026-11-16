@@ -8,6 +8,8 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "areas")
 data class AreaEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** Стабильный идентификатор для синхронизации между устройствами. */
+    val uuid: String = "",
     val name: String,
     /** Тип участка: MULTI — многоквартирный дом, PRIVATE — частный сектор. */
     val type: String = AreaType.MULTI.name,
@@ -27,9 +29,11 @@ enum class AreaType { MULTI, PRIVATE }
 )
 data class EntranceEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val uuid: String = "",
     val areaId: Long,
     val entranceNumber: Int,
     val createdAt: Long,
+    val updatedAt: Long = 0,
 )
 
 @Entity(
@@ -42,10 +46,12 @@ data class EntranceEntity(
 )
 data class FloorEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val uuid: String = "",
     val entranceId: Long,
     val floorNumber: Int,
     val apartmentCount: Int,
     val sortOrder: Int,
+    val updatedAt: Long = 0,
 )
 
 @Entity(
@@ -62,6 +68,7 @@ data class FloorEntity(
 )
 data class ApartmentEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val uuid: String = "",
     val entranceId: Long,
     val floorId: Long,
     val apartmentNumber: Int,
@@ -86,6 +93,7 @@ data class ApartmentEntity(
 )
 data class VisitHistoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val uuid: String = "",
     val apartmentId: Long,
     val visitDate: Long,
     val previousStatus: String?,

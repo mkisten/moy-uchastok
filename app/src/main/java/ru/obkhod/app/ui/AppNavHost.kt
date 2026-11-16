@@ -30,6 +30,7 @@ object Routes {
     const val ENTRANCE = "entrance/{entranceId}"
     const val DELETED = "deleted"
     const val SETTINGS = "settings" // используется как "settings?areaId={areaId}"
+    const val CLOUD = "cloud"
 
     fun area(id: Long) = "area/$id"
     fun entrance(id: Long) = "entrance/$id"
@@ -232,7 +233,11 @@ fun AppNavHost(
             ru.obkhod.app.ui.settings.SettingsScreen(
                 onBack = { nav.popBackStack() },
                 exportAreaId = entry.arguments?.getLong("areaId")?.takeIf { it >= 0 },
+                onOpenCloud = { nav.navigate(Routes.CLOUD) },
             )
+        }
+        composable(Routes.CLOUD) {
+            ru.obkhod.app.ui.cloud.CloudSyncScreen(onBack = { nav.popBackStack() })
         }
     }
 }

@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         AreaEntity::class, EntranceEntity::class, FloorEntity::class,
         ApartmentEntity::class, VisitHistoryEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -37,11 +37,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4: UUID всем строкам (синхронизация через Google Таблицу), updated_at подъездам/этажам. */
+        private val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE areas ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE entrances ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE floors ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE apartments ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE visit_history ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE entrances ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE floors ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                // Заполняем UUID у существующих строк
+                db.execSQL("UPDATE areas SET uuid = lower(hex(randomblob(16))) WHERE uuid = ''")
+                db.execSQL("UPDATE entrances SET uuid = lower(hex(randomblob(16))) WHERE uuid = ''")
+                db.execSQL("UPDATE floors SET uuid = lower(hex(randomblob(16))) WHERE uuid = ''")
+                db.execSQL("UPDATE apartments SET uuid = lower(hex(randomblob(16))) WHERE uuid = ''")
+                db.execSQL("UPDATE visit_history SET uuid = lower(hex(randomblob(16))) WHERE uuid = ''")
+                db.execSQL("UPDATE entrances SET updatedAt = createdAt WHERE updatedAt = 0")
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext, AppDatabase::class.java, "obkhod.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
             }
     }
 }

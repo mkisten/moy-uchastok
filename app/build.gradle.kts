@@ -7,6 +7,10 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Google OAuth Client ID (тип «iOS/Installed», без секрета). Заполняется в gradle.properties:
+//   googleClientId=1234567890-abc.apps.googleusercontent.com
+val googleClientId = (project.findProperty("googleClientId") as String?) ?: ""
+
 android {
     namespace = "ru.obkhod.app"
     compileSdk = 35
@@ -15,9 +19,12 @@ android {
         applicationId = "ru.obkhod.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.1.0"
         vectorDrawables { useSupportLibrary = true }
+        manifestPlaceholders["googleRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
+        manifestPlaceholders["appAuthRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleClientId\"")
     }
 
     buildTypes {
@@ -66,6 +73,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("net.openid:appauth:0.11.1")
 
     val room = "2.6.1"
     implementation("androidx.room:room-runtime:$room")

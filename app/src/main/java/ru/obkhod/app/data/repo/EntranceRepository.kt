@@ -94,6 +94,7 @@ class EntranceRepository(private val db: AppDatabase) {
             )
             historyDao.insert(
                 VisitHistoryEntity(
+                    uuid = newUuid(),
                     apartmentId = apartmentId,
                     visitDate = now,
                     previousStatus = if (prev == Status.NONE) null else prev.name,
@@ -115,6 +116,7 @@ class EntranceRepository(private val db: AppDatabase) {
             apartmentDao.update(apt.copy(status = Status.NONE.name, updatedAt = now))
             historyDao.insert(
                 VisitHistoryEntity(
+                    uuid = newUuid(),
                     apartmentId = apartmentId, visitDate = now,
                     previousStatus = prev.name, newStatus = null, eventType = EventType.RESET.name,
                 )
@@ -175,9 +177,11 @@ class EntranceRepository(private val db: AppDatabase) {
         return db.withTransactionCompat {
             val floorId = floorDao.insert(
                 FloorEntity(
+                    uuid = newUuid(),
                     entranceId = entranceId, floorNumber = newNumber,
                     apartmentCount = apartmentsOnFloor,
                     sortOrder = floorDao.getByEntrance(entranceId).count(),
+                    updatedAt = now,
                 )
             )
             if (apartmentsOnFloor > 0) {
@@ -189,6 +193,7 @@ class EntranceRepository(private val db: AppDatabase) {
                 apartmentDao.insertAll(
                     (1..apartmentsOnFloor).map { i ->
                         ApartmentEntity(
+                            uuid = newUuid(),
                             entranceId = entranceId, floorId = floorId,
                             apartmentNumber = existingMax + i, createdAt = now, updatedAt = now,
                         )
@@ -318,6 +323,7 @@ class EntranceRepository(private val db: AppDatabase) {
         val now = System.currentTimeMillis()
         apartmentDao.insert(
             ApartmentEntity(
+                uuid = newUuid(),
                 entranceId = entranceId, floorId = floor.id,
                 apartmentNumber = digits,
                 label = if (trimmed.matches(Regex("\\d+"))) null else trimmed,
@@ -346,14 +352,15 @@ class EntranceRepository(private val db: AppDatabase) {
         val now = System.currentTimeMillis()
         db.withTransactionCompat {
             val entranceId = entranceDao.insert(
-                EntranceEntity(areaId = areaId, entranceNumber = draft.number, createdAt = now)
+                EntranceEntity(uuid = newUuid(), areaId = areaId, entranceNumber = draft.number, createdAt = now, updatedAt = now)
             )
             var next = draft.startNumber
             for ((index, count) in draft.apartmentsPerFloor.withIndex()) {
                 val floorId = floorDao.insert(
                     FloorEntity(
+                        uuid = newUuid(),
                         entranceId = entranceId, floorNumber = index + 1,
-                        apartmentCount = count, sortOrder = index,
+                        apartmentCount = count, sortOrder = index, updatedAt = now,
                     )
                 )
                 if (count > 0) {
@@ -361,6 +368,7 @@ class EntranceRepository(private val db: AppDatabase) {
                         (0 until count).map { i ->
                             val t = System.currentTimeMillis()
                             ApartmentEntity(
+                                uuid = newUuid(),
                                 entranceId = entranceId, floorId = floorId,
                                 apartmentNumber = next + i, createdAt = t, updatedAt = t,
                             )

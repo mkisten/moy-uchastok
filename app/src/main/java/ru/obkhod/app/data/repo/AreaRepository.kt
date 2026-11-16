@@ -62,10 +62,10 @@ class AreaRepository(private val db: AppDatabase) {
             var createdPrivateId = 0L
             db.withTransactionCompat {
                 val t = System.currentTimeMillis()
-                val areaId = areaDao.insert(AreaEntity(name = trimmed, type = type.name, createdAt = t, updatedAt = t))
+                val areaId = areaDao.insert(AreaEntity(uuid = newUuid(), name = trimmed, type = type.name, createdAt = t, updatedAt = t))
                 createdPrivateId = areaId
-                val entranceId = entranceDao.insert(EntranceEntity(areaId = areaId, entranceNumber = 1, createdAt = t))
-                floorDao.insert(FloorEntity(entranceId = entranceId, floorNumber = 1, apartmentCount = 0, sortOrder = 0))
+                val entranceId = entranceDao.insert(EntranceEntity(uuid = newUuid(), areaId = areaId, entranceNumber = 1, createdAt = t, updatedAt = t))
+                floorDao.insert(FloorEntity(uuid = newUuid(), entranceId = entranceId, floorNumber = 1, apartmentCount = 0, sortOrder = 0, updatedAt = t))
             }
             return CreateAreaResult.Success(createdPrivateId)
         }
@@ -95,25 +95,27 @@ class AreaRepository(private val db: AppDatabase) {
         val now = System.currentTimeMillis()
         var createdId = 0L
         db.withTransactionCompat {
-            val areaId = areaDao.insert(AreaEntity(name = trimmed, createdAt = now, updatedAt = now))
+            val areaId = areaDao.insert(AreaEntity(uuid = newUuid(), name = trimmed, createdAt = now, updatedAt = now))
             createdId = areaId
             for (d in drafts) {
                 val entranceId = entranceDao.insert(
-                    EntranceEntity(areaId = areaId, entranceNumber = d.number, createdAt = now)
+                    EntranceEntity(uuid = newUuid(), areaId = areaId, entranceNumber = d.number, createdAt = now, updatedAt = now)
                 )
                 var nextNumber = d.startNumber
                 for ((index, count) in d.apartmentsPerFloor.withIndex()) {
                     val floorNumber = index + 1
                     val floorId = floorDao.insert(
                         FloorEntity(
+                            uuid = newUuid(),
                             entranceId = entranceId, floorNumber = floorNumber,
-                            apartmentCount = count, sortOrder = index,
+                            apartmentCount = count, sortOrder = index, updatedAt = now,
                         )
                     )
                     if (count > 0) {
                         val list = (0 until count).map { i ->
                             val t = System.currentTimeMillis()
                             ApartmentEntity(
+                                uuid = newUuid(),
                                 entranceId = entranceId, floorId = floorId,
                                 apartmentNumber = nextNumber + i,
                                 createdAt = t, updatedAt = t,
@@ -147,3 +149,6 @@ class AreaRepository(private val db: AppDatabase) {
 /** Расширение для запуска транзакций Room из suspend-кода. */
 suspend fun <R> AppDatabase.withTransactionCompat(block: suspend () -> R): R =
     this.withTransaction { block() }
+
+/** Генерация стабильного UUID для синхронизации между устройствами. */
+fun newUuid(): String = java.util.UUID.randomUUID().toString()

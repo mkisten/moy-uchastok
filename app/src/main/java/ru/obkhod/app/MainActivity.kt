@@ -1,6 +1,7 @@
 package ru.obkhod.app
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,10 +21,18 @@ import ru.obkhod.app.ui.theme.ObkhodTheme
 
 class MainActivity : ComponentActivity() {
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Redirect Google OAuth приходит сюда, когда активность уже открыта
+        ru.obkhod.app.data.remote.GoogleAuth.handleRedirectIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         AppContainer.init(this)
+        ru.obkhod.app.data.remote.GoogleAuth.init(this)
+        ru.obkhod.app.data.remote.GoogleAuth.handleRedirectIntent(intent)
 
         // Возврат к последнему открытому подъезду после перезапуска (п. 21 ТЗ).
         // Стартуем всегда со списка участков, а восстановленный подъезд открывается
