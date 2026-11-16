@@ -129,7 +129,25 @@ MIGRATION_2_3) → `entrances` (CASCADE) → `floors` (CASCADE) → `apartments`
   полный: подъезд → участок → список. runBlocking в onCreate удалён. MIUI-телефон
   (FEPV9XTC4DSOTOHU) блокирует adb input injection — UI-тесты на телефоне делать руками
   пользователя, автоматизация только на BlueStacks (127.0.0.1:5555).
-  Текущая версия 1.0.3 (versionCode 4), релиз v1.0.3 на GitHub.
+  Текущая версия 1.1.0 (versionCode 5), релиз v1.1.0 на GitHub.
+
+## Синхронизация (Google Таблица, v1.1.0)
+
+- Файлы: `data/remote/GoogleAuth.kt` (AppAuth OAuth, redirect com.googleusercontent.apps.<CLIENT_ID>:/oauthredirect
+  — intent-filter в манифесте через manifestPlaceholder googleRedirectScheme; манифест-плейсхолдер appAuthRedirectScheme
+  нужен библиотеке AppAuth), `data/remote/GoogleRest.kt` (HttpURLConnection + retry при 401),
+  `data/remote/TeamApi.kt` (создать/присоединить команду, permissions участников, чтение/запись листов),
+  `sync/SheetSync.kt` (движок), `ui/cloud/CloudSyncScreen.kt` + `CloudSyncViewModel.kt`, маршрут `cloud`.
+- CLIENT ID: `googleClientId` в gradle.properties (НЕ в git) → BuildConfig.GOOGLE_CLIENT_ID +
+  manifestPlaceholders. Пока не задан — экран «Синхронизация» показывает подсказку (isConfigured()).
+  Инструкция настройки OAuth в README. OAuth Client создаётся типа iOS, Bundle ID ru.obkhod.app.
+- Слияние: ключ uuid у всех строк (Room v4, MIGRATION_3_4: ALTER + backfill lower(hex(randomblob(16))));
+  newUuid() в data/repo ( top-level fun в AreaRepository.kt). Pull: remote.updated_at > local.updated_at →
+  применить; Push: local.updated_at > lastPush (prefs cloud_sync) → appendRows. History — union по uuid.
+  Удаление подъездов/этажей НЕ синхронизируется; удаление квартир — флаг deleted.
+  Structure-лист: kind(area/entrance/floor), uuid, parent_uuid, num1, num2, name, deleted, updated_at, updated_by.
+  Area type кодируется num1 (1=MULTI, 2=PRIVATE).
+- На здоро́вом уме: не менять местами freshEntranceById (ключ id) и ByUuid-мапы; h.apartmentId → Long.
 - **Название приложения** — «Мой участок» (strings.xml app_name + заголовок главного экрана),
   сменено с «Обход домов» по запросу пользователя 2026-11-16.
 - **Плитки квартир** (2026-11-16): уменьшены (48×44dp, колонка этажа 32dp, кнопка удаления

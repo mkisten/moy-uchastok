@@ -68,7 +68,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         root.put("areas", JSONArray().apply {
             areas.forEach { a ->
                 put(JSONObject().apply {
-                    put("id", a.id); put("name", a.name)
+                    put("id", a.id); put("uuid", a.uuid); put("name", a.name)
                     put("type", a.type)
                     put("createdAt", a.createdAt); put("updatedAt", a.updatedAt)
                 })
@@ -77,7 +77,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         root.put("entrances", JSONArray().apply {
             entrances.forEach { e ->
                 put(JSONObject().apply {
-                    put("id", e.id); put("areaId", e.areaId)
+                    put("id", e.id); put("uuid", e.uuid); put("areaId", e.areaId)
                     put("entranceNumber", e.entranceNumber); put("createdAt", e.createdAt)
                 })
             }
@@ -85,7 +85,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         root.put("floors", JSONArray().apply {
             floors.forEach { f ->
                 put(JSONObject().apply {
-                    put("id", f.id); put("entranceId", f.entranceId)
+                    put("id", f.id); put("uuid", f.uuid); put("entranceId", f.entranceId)
                     put("floorNumber", f.floorNumber); put("apartmentCount", f.apartmentCount)
                     put("sortOrder", f.sortOrder)
                 })
@@ -94,7 +94,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         root.put("apartments", JSONArray().apply {
             apartments.forEach { a ->
                 put(JSONObject().apply {
-                    put("id", a.id); put("entranceId", a.entranceId); put("floorId", a.floorId)
+                    put("id", a.id); put("uuid", a.uuid); put("entranceId", a.entranceId); put("floorId", a.floorId)
                     put("apartmentNumber", a.apartmentNumber); put("status", a.status)
                     put("label", a.label ?: JSONObject.NULL)
                     put("phone", a.phone ?: JSONObject.NULL); put("comment", a.comment ?: JSONObject.NULL)
@@ -107,7 +107,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         root.put("history", JSONArray().apply {
             history.forEach { h ->
                 put(JSONObject().apply {
-                    put("id", h.id); put("apartmentId", h.apartmentId); put("visitDate", h.visitDate)
+                    put("id", h.id); put("uuid", h.uuid); put("apartmentId", h.apartmentId); put("visitDate", h.visitDate)
                     put("previousStatus", h.previousStatus ?: JSONObject.NULL)
                     put("newStatus", h.newStatus ?: JSONObject.NULL)
                     put("comment", h.comment ?: JSONObject.NULL)
@@ -143,6 +143,14 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         } catch (e: Exception) {
             return RestoreResult.Error("Файл повреждён или не является резервной копией")
         }
+        return restoreFromJson(json)
+    }
+
+    /** Снапшот всей базы в формате бэкапа (для облачной синхронизации). */
+    suspend fun buildSnapshot(): JSONObject = buildJson()
+
+    /** Восстановление из JSON-снапшота (тот же формат, что и ZIP-бэкап). */
+    suspend fun restoreFromJson(json: JSONObject): RestoreResult {
 
         // Проверка версии формата (п. 18)
         val version = json.optInt("formatVersion", -1)

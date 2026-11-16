@@ -33,7 +33,7 @@ import ru.obkhod.app.ui.Routes
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: () -> Unit = {}) {
+fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: () -> Unit = {}, onOpenYandex: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themeSettings by ru.obkhod.app.ui.theme.ThemePrefs.flow(context)
@@ -113,8 +113,11 @@ fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: 
             HorizontalDivider()
             Text("Настройки", style = MaterialTheme.typography.titleMedium)
 
-            // Совместный доступ через общую Google-таблицу
-            Button(onClick = onOpenCloud, modifier = Modifier.fillMaxWidth()) {
+            // Совместный доступ: Яндекс Диск (простой вход) и Google Таблица
+            Button(onClick = onOpenYandex, modifier = Modifier.fillMaxWidth()) {
+                Text("Синхронизация (Яндекс Диск)")
+            }
+            OutlinedButton(onClick = onOpenCloud, modifier = Modifier.fillMaxWidth()) {
                 Text("Синхронизация (Google Таблица)")
             }
             Text("Тема", style = MaterialTheme.typography.titleMedium)

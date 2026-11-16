@@ -24,6 +24,8 @@ object AppContainer {
     }
 
     fun context(): Context = appContext
+
+    fun db(): AppDatabase = db!!
 }
 
 

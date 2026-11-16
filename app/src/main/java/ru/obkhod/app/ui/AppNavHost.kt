@@ -1,6 +1,7 @@
 package ru.obkhod.app.ui
 
 import android.app.Application
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -31,6 +32,7 @@ object Routes {
     const val DELETED = "deleted"
     const val SETTINGS = "settings" // используется как "settings?areaId={areaId}"
     const val CLOUD = "cloud"
+    const val YANDEX = "yandex"
 
     fun area(id: Long) = "area/$id"
     fun entrance(id: Long) = "entrance/$id"
@@ -48,6 +50,22 @@ fun AppNavHost(
             val vm: AreasViewModel = viewModel(factory = viewModelFactory { AreasViewModel(app) })
             val cards by vm.cards.collectAsState()
             val areasLoaded by vm.loaded.collectAsState()
+            // Тихая автосинхронизация с Яндекс Диском при запуске (если подключён)
+            LaunchedEffect(Unit) {
+                val prefs = app.getSharedPreferences("yandex_sync", Context.MODE_PRIVATE)
+                if (prefs.getString("login", null) != null) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val client = ru.obkhod.app.data.remote.WebDavClient(
+                                "https://webdav.yandex.ru",
+                                prefs.getString("login", "")!!,
+                                prefs.getString("app_password", "")!!,
+                            )
+                            ru.obkhod.app.sync.YandexSync(app, AppContainer.db(), client).sync()
+                        } catch (_: Exception) { /* офлайн — пропускаем */ }
+                    }
+                }
+            }
             // Восстановление последнего подъезда (п. 21 ТЗ): поверх списка участков,
             // с построением полной иерархии, чтобы «Назад» шёл подъезд → участок → список
             var restoreApplied by rememberSaveable { mutableStateOf(false) }
@@ -234,10 +252,14 @@ fun AppNavHost(
                 onBack = { nav.popBackStack() },
                 exportAreaId = entry.arguments?.getLong("areaId")?.takeIf { it >= 0 },
                 onOpenCloud = { nav.navigate(Routes.CLOUD) },
+                onOpenYandex = { nav.navigate(Routes.YANDEX) },
             )
         }
         composable(Routes.CLOUD) {
             ru.obkhod.app.ui.cloud.CloudSyncScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.YANDEX) {
+            ru.obkhod.app.ui.cloud.YandexSyncScreen(onBack = { nav.popBackStack() })
         }
     }
 }

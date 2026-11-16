@@ -32,6 +32,7 @@ class CloudSyncViewModel(app: Application) : AndroidViewModel(app) {
 
     private val api = TeamApi(app)
     private val db = AppDatabase.get(app)
+    // Yandex auto-sync uses AppContainer.db() from AppNavHost
 
     private val _state = MutableStateFlow(CloudUiState())
     val state: StateFlow<CloudUiState> = _state
