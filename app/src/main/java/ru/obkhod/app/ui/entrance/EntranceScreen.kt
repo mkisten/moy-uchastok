@@ -670,12 +670,6 @@ private fun FloorRow(
 }
 
 
-/** Набор номера через системную звонилку (без автоматического вызова, п. 9 ТЗ). */
-fun dialPhone(context: android.content.Context, phone: String) {
-    context.startActivity(
-        android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + android.net.Uri.encode(phone)))
-    )
-}
 
 /** Плитка квартиры с цветовым статусом и иконкой «i» (пп. 6–8). */
 @OptIn(ExperimentalFoundationApi::class)
@@ -748,6 +742,24 @@ private fun ApartmentTile(
                 )
             },
     ) {
+        // Телефон цифрами — кружок с трубкой в центре плитки (декоративный, неактивный)
+        val numericPhone = apartment.phone?.matches(Regex("[0-9]{5,}")) == true
+        if (numericPhone) {
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .size(34.dp)
+                    .background(Color.White.copy(alpha = 0.78f), androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.Call,
+                    contentDescription = "Есть телефон",
+                    modifier = Modifier.size(17.dp),
+                    tint = Color(0xFF1B5E20),
+                )
+            }
+        }
         Text(
             apartment.label,
             style = MaterialTheme.typography.labelLarge.copy(
@@ -768,24 +780,6 @@ private fun ApartmentTile(
                     .size(11.dp)
                     .padding(1.dp),
                 tint = Color(0xFF2E7D32),
-            )
-        }
-        // Значок трубки в левом верхнем углу: есть телефон — можно позвонить одним нажатием
-        if (!apartment.phone.isNullOrBlank()) {
-            val phoneInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            Icon(
-                Icons.Default.Call,
-                contentDescription = "Позвонить: ${apartment.phone}",
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .size(22.dp)
-                    .clickable(
-                        interactionSource = phoneInteraction,
-                        indication = null,
-                        onClick = { dialPhone(ctx, apartment.phone) },
-                    )
-                    .padding(2.dp),
-                tint = Color(0xFF1B5E20),
             )
         }
         if (apartment.hasNote) {
@@ -866,6 +860,23 @@ private fun HouseTile(
                 onClick = onTap,
             ),
     ) {
+        val numericHousePhone = house.phone?.matches(Regex("[0-9]{5,}")) == true
+        if (numericHousePhone) {
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .size(40.dp)
+                    .background(Color.White.copy(alpha = 0.78f), androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.Call,
+                    contentDescription = "Есть телефон",
+                    modifier = Modifier.size(20.dp),
+                    tint = Color(0xFF1B5E20),
+                )
+            }
+        }
         Text(
             house.label,
             style = MaterialTheme.typography.titleSmall.copy(
@@ -885,23 +896,6 @@ private fun HouseTile(
                     .size(12.dp)
                     .padding(1.dp),
                 tint = Color(0xFF2E7D32),
-            )
-        }
-        if (!house.phone.isNullOrBlank()) {
-            val phoneInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            Icon(
-                Icons.Default.Call,
-                contentDescription = "Позвонить: ${house.phone}",
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .size(22.dp)
-                    .clickable(
-                        interactionSource = phoneInteraction,
-                        indication = null,
-                        onClick = { dialPhone(ctx, house.phone) },
-                    )
-                    .padding(2.dp),
-                tint = Color(0xFF1B5E20),
             )
         }
         if (house.hasNote) {
