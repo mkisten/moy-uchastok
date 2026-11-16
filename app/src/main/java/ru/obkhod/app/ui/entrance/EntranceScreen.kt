@@ -778,14 +778,14 @@ private fun ApartmentTile(
                 contentDescription = "Позвонить: ${apartment.phone}",
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .size(13.dp)
-                    .padding(1.dp)
+                    .size(22.dp)
                     .clickable(
                         interactionSource = phoneInteraction,
                         indication = null,
                         onClick = { dialPhone(ctx, apartment.phone) },
-                    ),
-                tint = Color(0xFF2E7D32),
+                    )
+                    .padding(2.dp),
+                tint = Color(0xFF1B5E20),
             )
         }
         if (apartment.hasNote) {
@@ -894,14 +894,14 @@ private fun HouseTile(
                 contentDescription = "Позвонить: ${house.phone}",
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .size(13.dp)
-                    .padding(1.dp)
+                    .size(22.dp)
                     .clickable(
                         interactionSource = phoneInteraction,
                         indication = null,
                         onClick = { dialPhone(ctx, house.phone) },
-                    ),
-                tint = Color(0xFF2E7D32),
+                    )
+                    .padding(2.dp),
+                tint = Color(0xFF1B5E20),
             )
         }
         if (house.hasNote) {
