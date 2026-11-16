@@ -155,7 +155,7 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
                 prefs.edit().putLong("last_sync_at", System.currentTimeMillis()).apply()
                 withMain {
                     _state.value = _state.value.copy(busy = false,
-                        message = "Синхронизировано: получено ${result.pulled} записей")
+                        message = "Синхронизировано: отправлено ${result.pushed}, получено ${result.pulled}")
                 }
                 refresh()
             } catch (e: WebDavClient.HttpException) {
@@ -245,11 +245,23 @@ fun YandexSyncScreen(onBack: () -> Unit) {
                 }
                 HorizontalDivider()
                 Text(
-                    "Совместный доступ: на Яндекс Диске поделитесь папкой «Мой участок» с участниками " +
-                        "(правый клик → Поделиться → их email). Участники подключают свой аккаунт Яндекса в этом приложении.",
+                    "Совместный доступ: поделитесь папкой «Мой участок» с участниками по их email " +
+                        "(на disk.yandex.ru → папка → Поделиться). Участники подключают свой аккаунт " +
+                        "Яндекса в этом приложении и синхронизируются.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                OutlinedButton(onClick = {
+                    val ctx = LocalContext.current
+                    ctx.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://disk.yandex.ru/client/%D0%9C%D0%BE%D0%B9%20%D1%83%D1%87%D0%B0%D1%81%D1%82%D0%BE%D0%BA"),
+                        )
+                    )
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Открыть папку на Яндекс Диске (поделиться)")
+                }
                 OutlinedButton(onClick = { vm.restoreFromCloud() }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                     Text("Восстановить данные из облака")
                 }

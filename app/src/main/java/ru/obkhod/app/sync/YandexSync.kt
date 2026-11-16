@@ -186,7 +186,7 @@ class YandexSync(
         val snapshot = manager.buildSnapshot()
         webdav.put(DATA_FILE, snapshot.toString(0))
 
-        return Result(pulled, 1)
+        return Result(pulled, pushed)
     }
 
     /** Полная замена локальных данных облачным снапшотом (ручное восстановление). */

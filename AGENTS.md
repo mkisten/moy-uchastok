@@ -180,6 +180,11 @@ MIGRATION_2_3) → `entrances` (CASCADE) → `floors` (CASCADE) → `apartments`
 
 ## Синхронизация (Google Таблица, v1.1.0)
 
+- WebDavClient переписан на OkHttp v1.3.1: HttpURLConnection блокирует метод MKCOL
+  ("Expected one of [OPTIONS, GET, ...] but was MKCOL") — OkHttp поддерживает любые методы.
+  Яндекс OAuth: 401 после входа = в приложении oauth.yandex.ru не добавлен доступ
+  «Яндекс Диск → Запись во всех папках и на диске» (cloud_app:write); старый токен новых
+  прав не получает — перевыпустить входом заново.
 - Файлы: `data/remote/GoogleAuth.kt` (AppAuth OAuth, redirect com.googleusercontent.apps.<CLIENT_ID>:/oauthredirect
   — intent-filter в манифесте через manifestPlaceholder googleRedirectScheme; манифест-плейсхолдер appAuthRedirectScheme
   нужен библиотеке AppAuth), `data/remote/GoogleRest.kt` (HttpURLConnection + retry при 401),
