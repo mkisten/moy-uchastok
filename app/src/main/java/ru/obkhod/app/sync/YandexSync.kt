@@ -44,6 +44,7 @@ class YandexSync(
         }
 
         var pulled = 0
+        var pushed = 0
 
         if (remoteJson != null) {
             // 2. Слияние удалённого снапшота в локальную базу по uuid

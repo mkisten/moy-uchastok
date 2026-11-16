@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -668,6 +669,14 @@ private fun FloorRow(
     }
 }
 
+
+/** Набор номера через системную звонилку (без автоматического вызова, п. 9 ТЗ). */
+fun dialPhone(context: android.content.Context, phone: String) {
+    context.startActivity(
+        android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + android.net.Uri.encode(phone)))
+    )
+}
+
 /** Плитка квартиры с цветовым статусом и иконкой «i» (пп. 6–8). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -685,6 +694,7 @@ private fun ApartmentTile(
     var tileRoot by remember { mutableStateOf(Offset.Zero) }
     val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val haptic = LocalHapticFeedback.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     Box(
         Modifier
             .sizeIn(minWidth = 48.dp, minHeight = 44.dp)
@@ -760,6 +770,24 @@ private fun ApartmentTile(
                 tint = Color(0xFF2E7D32),
             )
         }
+        // Значок трубки в левом верхнем углу: есть телефон — можно позвонить одним нажатием
+        if (!apartment.phone.isNullOrBlank()) {
+            val phoneInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            Icon(
+                Icons.Default.Call,
+                contentDescription = "Позвонить: ${apartment.phone}",
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(13.dp)
+                    .padding(1.dp)
+                    .clickable(
+                        interactionSource = phoneInteraction,
+                        indication = null,
+                        onClick = { dialPhone(ctx, apartment.phone) },
+                    ),
+                tint = Color(0xFF2E7D32),
+            )
+        }
         if (apartment.hasNote) {
             val iconInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             Icon(
@@ -824,6 +852,7 @@ private fun HouseTile(
     onInfo: () -> Unit,
 ) {
     val color = statusColor(house.status)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Box(
         Modifier
@@ -855,6 +884,23 @@ private fun HouseTile(
                     .align(Alignment.BottomEnd)
                     .size(12.dp)
                     .padding(1.dp),
+                tint = Color(0xFF2E7D32),
+            )
+        }
+        if (!house.phone.isNullOrBlank()) {
+            val phoneInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            Icon(
+                Icons.Default.Call,
+                contentDescription = "Позвонить: ${house.phone}",
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(13.dp)
+                    .padding(1.dp)
+                    .clickable(
+                        interactionSource = phoneInteraction,
+                        indication = null,
+                        onClick = { dialPhone(ctx, house.phone) },
+                    ),
                 tint = Color(0xFF2E7D32),
             )
         }

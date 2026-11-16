@@ -251,8 +251,8 @@ fun YandexSyncScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                val ctx = LocalContext.current
                 OutlinedButton(onClick = {
-                    val ctx = LocalContext.current
                     ctx.startActivity(
                         android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
