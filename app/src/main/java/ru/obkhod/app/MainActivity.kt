@@ -26,20 +26,11 @@ class MainActivity : ComponentActivity() {
         AppContainer.init(this)
 
         // Возврат к последнему открытому подъезду после перезапуска (п. 21 ТЗ).
-        // Для частного сектора восстановление ведёт к списку участков: у схемы домов нет
-        // «родительского» экрана, иначе «Назад» не возвращает к списку (баг 1.0.1 на телефоне).
-        // Тип участка определяем по самому подъезду — lastAreaId мог не сохраниться.
+        // Стартуем всегда со списка участков, а восстановленный подъезд открывается
+        // поверх него в LaunchedEffect — тогда «Назад» проходит всю иерархию:
+        // подъезд → участок → список участков (раньше «Назад» закрывал приложение).
         val prefs = getSharedPreferences("nav_state", Context.MODE_PRIVATE)
-        val lastEntrance = prefs.getLong("lastEntranceId", -1L)
-        val start = kotlinx.coroutines.runBlocking {
-            if (lastEntrance > 0) {
-                val area = AppContainer.areaRepository.areaOfEntrance(lastEntrance)
-                val isPrivate = area?.type == ru.obkhod.app.data.db.AreaType.PRIVATE.name
-                if (isPrivate) Routes.AREAS else Routes.entrance(lastEntrance)
-            } else {
-                Routes.AREAS
-            }
-        }
+        val restoreEntranceId = prefs.getLong("lastEntranceId", -1L)
 
         setContent {
             // Настройки темы из DataStore: режим + динамический цвет
@@ -54,7 +45,12 @@ class MainActivity : ComponentActivity() {
             ObkhodTheme(darkTheme = darkTheme, dynamicColor = themeSettings.dynamicColor) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val nav = rememberNavController()
-                    AppNavHost(nav = nav, app = application, startDestination = start)
+                    AppNavHost(
+                        nav = nav,
+                        app = application,
+                        startDestination = Routes.AREAS,
+                        restoreEntranceId = restoreEntranceId,
+                    )
                     androidx.compose.runtime.LaunchedEffect(nav) {
                         nav.currentBackStackEntryFlow.collect { entry ->
                             val entranceId = entry.arguments?.getLong("entranceId")

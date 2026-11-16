@@ -2,11 +2,13 @@ package ru.obkhod.app.ui
 
 import android.app.Application
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -34,12 +36,33 @@ object Routes {
 }
 
 @Composable
-fun AppNavHost(nav: NavHostController, app: Application, startDestination: String = Routes.AREAS) {
+fun AppNavHost(
+    nav: NavHostController,
+    app: Application,
+    startDestination: String = Routes.AREAS,
+    restoreEntranceId: Long = -1L,
+) {
     NavHost(navController = nav, startDestination = startDestination) {
         composable(Routes.AREAS) {
             val vm: AreasViewModel = viewModel(factory = viewModelFactory { AreasViewModel(app) })
             val cards by vm.cards.collectAsState()
             val areasLoaded by vm.loaded.collectAsState()
+            // Восстановление последнего подъезда (п. 21 ТЗ): поверх списка участков,
+            // с построением полной иерархии, чтобы «Назад» шёл подъезд → участок → список
+            var restoreApplied by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(areasLoaded) {
+                if (areasLoaded && !restoreApplied && restoreEntranceId > 0) {
+                    restoreApplied = true
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        val area = AppContainer.areaRepository.areaOfEntrance(restoreEntranceId)
+                        val isPrivate = area?.type == ru.obkhod.app.data.db.AreaType.PRIVATE.name
+                        area to isPrivate
+                    }.let { (area, isPrivate) ->
+                        if (area != null && !isPrivate) nav.navigate(Routes.area(area.id))
+                        if (area != null) nav.navigate(Routes.entrance(restoreEntranceId))
+                    }
+                }
+            }
             AreasScreen(
                 cards = cards,
                 loaded = areasLoaded,
