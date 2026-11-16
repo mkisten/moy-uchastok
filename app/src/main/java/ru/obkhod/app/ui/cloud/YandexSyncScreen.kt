@@ -7,9 +7,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.obkhod.app.data.db.AppDatabase
 import ru.obkhod.app.data.remote.WebDavClient
+import ru.obkhod.app.data.remote.YandexAuth
 import ru.obkhod.app.sync.YandexSync
 import ru.obkhod.app.ui.AppContainer
 import ru.obkhod.app.ui.viewModelFactory
@@ -34,11 +35,13 @@ import java.util.Date
 import java.util.Locale
 
 data class YandexUiState(
-    val login: String = "",
+    val configured: Boolean = true,
     val connected: Boolean = false,
+    val login: String = "",
     val busy: Boolean = false,
     val message: String? = null,
     val lastSyncAt: Long = 0L,
+    val showPasswordForm: Boolean = false,
 )
 
 class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
@@ -50,64 +53,95 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(YandexUiState())
     val state: StateFlow<YandexUiState> = _state
 
-    init { refresh() }
+    init {
+        YandexAuth.init(app)
+        refresh()
+        // Реагируем на завершение OAuth-входа
+        viewModelScope.launch {
+            YandexAuth.login.collect { _ ->
+                _state.value = _state.value.copy(
+                    connected = YandexAuth.isSignedIn(),
+                    login = YandexAuth.login.value ?: "",
+                )
+                YandexAuth.message.value?.let { msg ->
+                    _state.value = _state.value.copy(message = msg)
+                    YandexAuth.clearMessage()
+                }
+            }
+        }
+    }
 
     fun refresh() {
-        val login = prefs.getString("login", null)
-        _state.value = YandexUiState(
-            login = login ?: "",
-            connected = login != null,
+        val oauthSigned = YandexAuth.isSignedIn()
+        val davLogin = prefs.getString("login", null)
+        _state.value = _state.value.copy(
+            configured = YandexAuth.isConfigured(),
+            connected = oauthSigned || davLogin != null,
+            login = YandexAuth.login.value ?: davLogin ?: "",
             lastSyncAt = prefs.getLong("last_sync_at", 0L),
         )
     }
 
-    private fun client(): WebDavClient {
-        val login = prefs.getString("login", null)
-            ?: throw IllegalStateException("Сначала введите логин и пароль приложения")
-        return WebDavClient(
-            server = "https://webdav.yandex.ru",
-            login = login,
-            password = prefs.getString("app_password", null) ?: "",
-        )
+    private fun client(): WebDavClient =
+        if (YandexAuth.isSignedIn()) {
+            WebDavClient.oauth("https://webdav.yandex.ru", YandexAuth.accessToken())
+        } else {
+            val login = prefs.getString("login", null)
+                ?: throw IllegalStateException("Сначала подключите Яндекс Диск")
+            WebDavClient.basic(
+                "https://webdav.yandex.ru", login,
+                prefs.getString("app_password", null) ?: "",
+            )
+        }
+
+    fun openYandexLogin(context: android.content.Context) {
+        if (!YandexAuth.isConfigured()) {
+            _state.value = _state.value.copy(
+                message = "Вход через Яндекс ID ещё не настроен в этой сборке — используйте пароль приложения ниже",
+            )
+            return
+        }
+        YandexAuth.openLoginPage(context)
+        _state.value = _state.value.copy(message = "Подтвердите вход в Яндексе и вставьте код подтверждения сюда")
     }
 
-    fun connect(login: String, appPassword: String) {
+    fun exchangeCode(code: String) {
+        _state.value = _state.value.copy(busy = true, message = null)
+        viewModelScope.launch(Dispatchers.IO) {
+            val login = YandexAuth.exchangeCode(code)
+            withMain {
+                _state.value = _state.value.copy(
+                    busy = false,
+                    message = if (login != null) "Вход выполнен: $login" else null,
+                )
+                refresh()
+            }
+        }
+    }
+
+    fun connectByPassword(login: String, appPassword: String) {
         _state.value = _state.value.copy(busy = true, message = null)
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Логин без домена: Яндекс WebDAV принимает только имя аккаунта
-                val cleanLogin = login.trim()
-                    .removeSuffix("@yandex.ru").removeSuffix("@ya.ru")
-                    .removeSuffix("@yandex.by").removeSuffix("@yandex.com")
-                // Проверка доступа: читаем корень диска
-                WebDavClient("https://webdav.yandex.ru", cleanLogin, appPassword.trim()).get("/")
-                prefs.edit()
-                    .putString("login", cleanLogin)
-                    .putString("app_password", appPassword.trim())
-                    .apply()
-                withMain { _state.value = _state.value.copy(busy = false, connected = true, login = cleanLogin, message = "Подключено к Яндекс Диску") }
+                val clean = login.trim().removeSuffix("@yandex.ru").removeSuffix("@ya.ru")
+                WebDavClient.basic("https://webdav.yandex.ru", clean, appPassword.trim()).get("/")
+                prefs.edit().putString("login", clean).putString("app_password", appPassword.trim()).apply()
+                withMain { _state.value = _state.value.copy(busy = false, message = "Подключено к Яндекс Диску") }
                 refresh()
             } catch (e: WebDavClient.HttpException) {
                 withMain {
                     _state.value = _state.value.copy(
                         busy = false,
-                        message = when (e.code) {
-                            401 -> "Неверный логин или пароль. Важно: основной пароль Яндекса не подходит — нужен «пароль приложения»: id.yandex.ru → Безопасность → Пароли приложений → Создать → тип «Яндекс Диск»"
-                            403 -> "Доступ запрещён: проверьте, что пароль приложения создан для Яндекс Диска"
-                            else -> "Ошибка подключения (${e.code}). Проверьте интернет-соединение"
-                        },
+                        message = if (e.code == 401) {
+                            "Неверный логин или пароль. Основной пароль Яндекса не подходит — нужен «пароль приложения»: " +
+                                "id.yandex.ru → Безопасность → Пароли приложений → тип «Яндекс Диск»"
+                        } else "Ошибка подключения (${e.code})",
                     )
                 }
             } catch (e: Exception) {
-                withMain { _state.value = _state.value.copy(busy = false, message = "Ошибка подключения: проверьте интернет-соединение") }
+                withMain { _state.value = _state.value.copy(busy = false, message = "Ошибка подключения: проверьте интернет") }
             }
         }
-    }
-
-    fun disconnect() {
-        prefs.edit().clear().apply()
-        refresh()
-        _state.value = _state.value.copy(message = "Яндекс Диск отключён")
     }
 
     fun syncNow() {
@@ -117,19 +151,16 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
                 val sync = YandexSync(getApplication(), db, client())
                 val result = sync.sync()
                 prefs.edit().putLong("last_sync_at", System.currentTimeMillis()).apply()
-                withMain { _state.value = _state.value.copy(busy = false,
-                    message = "Синхронизировано: получено ${result.pulled} записей") }
+                withMain {
+                    _state.value = _state.value.copy(busy = false,
+                        message = "Синхронизировано: получено ${result.pulled} записей")
+                }
                 refresh()
             } catch (e: WebDavClient.HttpException) {
                 withMain {
-                    _state.value = _state.value.copy(
-                        busy = false,
-                        message = if (e.code == 401) {
-                            "Доступ отклонён Яндексом (401): пароль приложения устарел или неверен. " +
-                                "Создайте новый на id.yandex.ru → Безопасность → Пароли приложений, " +
-                                "затем «Отключить» и подключитесь заново"
-                        } else "Ошибка синхронизации (${e.code}): проверьте интернет-соединение",
-                    )
+                    _state.value = _state.value.copy(busy = false,
+                        message = if (e.code == 401) "Доступ отклонён (401): войдите через Яндекс заново"
+                        else "Ошибка синхронизации (${e.code}): проверьте интернет")
                 }
             } catch (e: Exception) {
                 withMain { _state.value = _state.value.copy(busy = false, message = "Ошибка: ${e.message}") }
@@ -141,9 +172,8 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = _state.value.copy(busy = true, message = null)
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val sync = YandexSync(getApplication(), db, client())
-                sync.restoreFromCloud()
-                withMain { _state.value = _state.value.copy(busy = false, message = "Данные восстановлены из облака (локальные данные заменены)") }
+                YandexSync(getApplication(), db, client()).restoreFromCloud()
+                withMain { _state.value = _state.value.copy(busy = false, message = "Данные восстановлены из облака") }
                 refresh()
             } catch (e: Exception) {
                 withMain { _state.value = _state.value.copy(busy = false, message = "Ошибка: ${e.message}") }
@@ -151,12 +181,23 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun disconnect() {
+        YandexAuth.signOut()
+        prefs.edit().clear().apply()
+        refresh()
+        _state.value = _state.value.copy(message = "Яндекс Диск отключён")
+    }
+
+    fun togglePasswordForm() {
+        _state.value = _state.value.copy(showPasswordForm = !_state.value.showPasswordForm)
+    }
+
     private suspend fun withMain(block: () -> Unit) = withContext(Dispatchers.Main) { block() }
 }
 
 /**
- * Экран «Синхронизация (Яндекс Диск)»: общая папка «Мой участок» на Яндекс Диске,
- * вход по логину и паролю приложения (создаётся на id.yandex.ru → Безопасность).
+ * Экран «Синхронизация (Яндекс Диск)»: вход через Яндекс ID (подтверждение в приложении
+ * Яндекса / по телефону) либо по паролю приложения. Общая папка «Мой участок».
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,6 +206,7 @@ fun YandexSyncScreen(onBack: () -> Unit) {
         YandexSyncViewModel(AppContainer.context() as Application)
     })
     val state by vm.state.collectAsState()
+    val ctx = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -186,48 +228,7 @@ fun YandexSyncScreen(onBack: () -> Unit) {
                 }
             }
 
-            if (!state.connected) {
-                var login by remember { mutableStateOf("") }
-                var password by remember { mutableStateOf("") }
-                Text("Вход", style = MaterialTheme.typography.titleMedium)
-                // ВАЖНО: основной пароль Яндекса не подходит — только пароль приложения
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("Как получить пароль:", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "1. Откройте id.yandex.ru → Безопасность\n" +
-                                "2. «Пароли приложений» → «Создать новый»\n" +
-                                "3. Тип: «Яндекс Диск»\n" +
-                                "4. Вставьте сгенерированный пароль ниже\n\n" +
-                                "Основной пароль Яндекса не подходит!",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-                OutlinedTextField(
-                    value = login, onValueChange = { login = it },
-                    label = { Text("Логин Яндекса (без @yandex.ru)") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = password, onValueChange = { password = it },
-                    label = { Text("Пароль приложения") },
-                    supportingText = { Text("Не основной пароль — именно из шага 2 выше") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Button(
-                    onClick = { vm.connect(login, password) },
-                    enabled = login.isNotBlank() && password.isNotBlank() && !state.busy,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                ) { Text("Подключить Яндекс Диск") }
-            } else {
+            if (state.connected) {
                 Text("Аккаунт: ${state.login}", style = MaterialTheme.typography.bodyMedium)
                 val lastSync = if (state.lastSyncAt > 0) {
                     SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(state.lastSyncAt))
@@ -237,18 +238,13 @@ fun YandexSyncScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
-                    onClick = { vm.syncNow() },
-                    enabled = !state.busy,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                ) { Text(if (state.busy) "Синхронизация…" else "Синхронизировать") }
-
+                Button(onClick = { vm.syncNow() }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    Text(if (state.busy) "Синхронизация…" else "Синхронизировать")
+                }
                 HorizontalDivider()
-
                 Text(
-                    "Совместный доступ: на Яндекс Диске поделитесь папкой «Мой участок» " +
-                        "с участниками (правый клик → Поделиться → email), и они, подключив свой аккаунт " +
-                        "в этом приложении, будут работать с теми же данными.",
+                    "Совместный доступ: на Яндекс Диске поделитесь папкой «Мой участок» с участниками " +
+                        "(правый клик → Поделиться → их email). Участники подключают свой аккаунт Яндекса в этом приложении.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -260,6 +256,59 @@ fun YandexSyncScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                 ) { Text("Отключить Яндекс Диск") }
+            } else {
+                Text("Совместный доступ к данным через общую папку Яндекс Диска", style = MaterialTheme.typography.bodyMedium)
+
+                // Основной вход — через Яндекс ID (подтверждение в приложении/по телефону)
+                Button(
+                    onClick = { vm.openYandexLogin(ctx) },
+                    enabled = !state.busy,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                ) { Text("Войти через Яндекс", fontWeight = FontWeight.SemiBold) }
+
+                var code by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = code, onValueChange = { code = it },
+                    label = { Text("Код подтверждения (если Яндекс его показал)") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = { vm.exchangeCode(code); code = "" },
+                    enabled = code.isNotBlank() && !state.busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Подтвердить код") }
+
+                HorizontalDivider()
+
+                // Запасной вход — пароль приложения
+                if (!state.showPasswordForm) {
+                    OutlinedButton(onClick = { vm.togglePasswordForm() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Войти по паролю приложения")
+                    }
+                } else {
+                    var login by remember { mutableStateOf("") }
+                    var password by remember { mutableStateOf("") }
+                    Text("Вход по паролю приложения", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(
+                        value = login, onValueChange = { login = it },
+                        label = { Text("Логин Яндекса (без @yandex.ru)") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = password, onValueChange = { password = it },
+                        label = { Text("Пароль приложения") },
+                        supportingText = { Text("id.yandex.ru → Безопасность → Пароли приложений → тип «Яндекс Диск»") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = { vm.connectByPassword(login, password) },
+                        enabled = login.isNotBlank() && password.isNotBlank() && !state.busy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Подключить") }
+                }
             }
         }
     }

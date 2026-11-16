@@ -5,12 +5,25 @@ import java.net.URL
 import java.util.Base64
 
 /**
- * Минимальный WebDAV-клиент (GET/PUT/MKCOL/PROPFIND) с Basic-авторизацией.
- * Достаточно для Яндекс Диска (webdav.yandex.ru) и совместимых серверов.
+ * Минимальный WebDAV-клиент (GET/PUT/MKCOL) с Basic-авторизацией (пароль приложения)
+ * или OAuth-токеном (Authorization: OAuth …) — Яндекс Диск поддерживает оба.
  */
-class WebDavClient(private val server: String, private val login: String, private val password: String) {
+class WebDavClient(private val server: String, private val authHeader: String) {
 
     class HttpException(val code: Int, message: String) : Exception("$code: $message")
+
+    companion object {
+        /** Basic-авторизация (логин + пароль приложения). */
+        fun basic(server: String, login: String, password: String): WebDavClient {
+            val auth = java.util.Base64.getEncoder()
+                .encodeToString("$login:$password".toByteArray(Charsets.UTF_8))
+            return WebDavClient(server, "Basic $auth")
+        }
+
+        /** Авторизация OAuth-токеном (вход через Яндекс ID). */
+        fun oauth(server: String, token: String): WebDavClient =
+            WebDavClient(server, "OAuth $token")
+    }
 
     private fun connection(url: String, method: String, body: ByteArray? = null): HttpURLConnection {
         // Кириллица в путях папок: кодируем каждый сегмент (разделители сохраняем)
@@ -21,8 +34,7 @@ class WebDavClient(private val server: String, private val login: String, privat
         conn.requestMethod = method
         conn.connectTimeout = 15000
         conn.readTimeout = 60000
-        val auth = java.util.Base64.getEncoder().encodeToString("$login:$password".toByteArray(Charsets.UTF_8))
-        conn.setRequestProperty("Authorization", "Basic $auth")
+        conn.setRequestProperty("Authorization", authHeader)
         if (body != null) {
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/octet-stream")

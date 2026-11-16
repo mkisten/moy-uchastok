@@ -56,11 +56,19 @@ fun AppNavHost(
                 if (prefs.getString("login", null) != null) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         try {
-                            val client = ru.obkhod.app.data.remote.WebDavClient(
-                                "https://webdav.yandex.ru",
-                                prefs.getString("login", "")!!,
-                                prefs.getString("app_password", "")!!,
-                            )
+                            // OAuth-токен, если есть; иначе пароль приложения
+                            val client = if (ru.obkhod.app.data.remote.YandexAuth.isSignedIn()) {
+                                ru.obkhod.app.data.remote.WebDavClient.oauth(
+                                    "https://webdav.yandex.ru",
+                                    ru.obkhod.app.data.remote.YandexAuth.accessToken(),
+                                )
+                            } else {
+                                ru.obkhod.app.data.remote.WebDavClient.basic(
+                                    "https://webdav.yandex.ru",
+                                    prefs.getString("login", "")!!,
+                                    prefs.getString("app_password", "")!!,
+                                )
+                            }
                             ru.obkhod.app.sync.YandexSync(app, AppContainer.db(), client).sync()
                         } catch (_: Exception) { /* офлайн — пропускаем */ }
                     }

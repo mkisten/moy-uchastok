@@ -11,6 +11,16 @@ plugins {
 //   googleClientId=1234567890-abc.apps.googleusercontent.com
 val googleClientId = (project.findProperty("googleClientId") as String?) ?: ""
 
+// Яндекс OAuth (вход через Яндекс ID). Ключи хранятся в local.properties (не публикуются):
+//   yandexClientId=...
+//   yandexClientSecret=...
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val yandexClientId = localProps.getProperty("yandexClientId") ?: ""
+val yandexClientSecret = localProps.getProperty("yandexClientSecret") ?: ""
+
 android {
     namespace = "ru.obkhod.app"
     compileSdk = 35
@@ -25,6 +35,8 @@ android {
         manifestPlaceholders["googleRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
         manifestPlaceholders["appAuthRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
         buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleClientId\"")
+        buildConfigField("String", "YANDEX_CLIENT_ID", "\"$yandexClientId\"")
+        buildConfigField("String", "YANDEX_CLIENT_SECRET", "\"$yandexClientSecret\"")
     }
 
     buildTypes {
