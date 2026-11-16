@@ -175,6 +175,46 @@ fun AreasScreen(
             onSave = { name -> onRenameArea(card.area.id, name); renameTarget = null },
         )
     }
+
+    // Проверка обновлений через GitHub Releases (тихая, при ошибке сети просто пропускается)
+    var updateInfo by remember { mutableStateOf<ru.obkhod.app.update.UpdateChecker.UpdateInfo?>(null) }
+    LaunchedEffect(Unit) {
+        updateInfo = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            ru.obkhod.app.update.UpdateChecker.fetchLatest(ru.obkhod.app.BuildConfig.VERSION_NAME)
+        }
+    }
+    updateInfo?.let { update ->
+        val context = androidx.compose.ui.platform.LocalContext.current
+        AlertDialog(
+            onDismissRequest = { updateInfo = null },
+            title = { Text("Доступно обновление ${update.version}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (update.changelog.isNotBlank()) {
+                        Text(update.changelog, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(
+                        "Текущая версия: ${ru.obkhod.app.BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    // Открываем прямую ссылку на APK из релиза — браузер скачает файл
+                    context.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(update.apkUrl.ifBlank { update.releasePageUrl }),
+                        )
+                    )
+                    updateInfo = null
+                }) { Text("Обновить") }
+            },
+            dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("Позже") } },
+        )
+    }
 }
 
 @Composable
