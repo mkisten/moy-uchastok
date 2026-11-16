@@ -56,17 +56,19 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
     init {
         YandexAuth.init(app)
         refresh()
-        // Реагируем на завершение OAuth-входа
+        // Реагируем на завершение OAuth-входа; после успешного входа сразу синхронизируем
         viewModelScope.launch {
             YandexAuth.login.collect { _ ->
+                val signedIn = YandexAuth.isSignedIn()
                 _state.value = _state.value.copy(
-                    connected = YandexAuth.isSignedIn(),
+                    connected = signedIn,
                     login = YandexAuth.login.value ?: "",
                 )
                 YandexAuth.message.value?.let { msg ->
                     _state.value = _state.value.copy(message = msg)
                     YandexAuth.clearMessage()
                 }
+                if (signedIn) syncNow()
             }
         }
     }
