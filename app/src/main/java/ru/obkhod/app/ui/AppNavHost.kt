@@ -79,15 +79,10 @@ fun AppNavHost(nav: NavHostController, app: Application, startDestination: Strin
             val name by vm.areaName.collectAsState()
             val cards by vm.cards.collectAsState()
             val isPrivateArea by vm.isPrivate.collectAsState()
-            // Частный сектор: подъезды не показываются — сразу схема домов;
-            // экран участка убирается из backstack, «Назад» ведёт к списку участков
-            if (isPrivateArea && cards.isNotEmpty()) {
-                androidx.compose.runtime.LaunchedEffect(isPrivateArea, cards.size) {
-                    nav.navigate(Routes.entrance(cards.first().entrance.id)) {
-                        popUpTo("area/{areaId}") { inclusive = true }
-                    }
-                }
-            }
+            // Частный сектор: авто-перенаправление убрано (создавало навигационный тупик —
+            // «Назад» возвращало на экран участка, который снова открывал схему домов).
+            // Обычно на этот маршрут для PRIVATE не попадаем: AreasScreen открывает схему домов
+            // напрямую. Если маршрут всё же открыт — плитка «Подъезд № 1» ведёт к домам.
             AreaScreen(
                 isPrivate = isPrivateArea,
                 areaName = name,

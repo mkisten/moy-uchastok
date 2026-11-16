@@ -26,14 +26,14 @@ class MainActivity : ComponentActivity() {
         AppContainer.init(this)
 
         // Возврат к последнему открытому подъезду после перезапуска (п. 21 ТЗ).
-        // Для частного сектора восстановление ведёт к списку участков: у него нет
-        // «родительского» экрана подъездов, иначе «Назад» не возвращает к списку.
+        // Для частного сектора восстановление ведёт к списку участков: у схемы домов нет
+        // «родительского» экрана, иначе «Назад» не возвращает к списку (баг 1.0.1 на телефоне).
+        // Тип участка определяем по самому подъезду — lastAreaId мог не сохраниться.
         val prefs = getSharedPreferences("nav_state", Context.MODE_PRIVATE)
         val lastEntrance = prefs.getLong("lastEntranceId", -1L)
-        val lastArea = prefs.getLong("lastAreaId", -1L)
         val start = kotlinx.coroutines.runBlocking {
-            if (lastEntrance > 0 && lastArea > 0) {
-                val area = AppContainer.areaRepository.getById(lastArea)
+            if (lastEntrance > 0) {
+                val area = AppContainer.areaRepository.areaOfEntrance(lastEntrance)
                 val isPrivate = area?.type == ru.obkhod.app.data.db.AreaType.PRIVATE.name
                 if (isPrivate) Routes.AREAS else Routes.entrance(lastEntrance)
             } else {
