@@ -765,10 +765,10 @@ private fun ApartmentTile(
         if (apartment.hasChild) {
             Icon(
                 Icons.Default.ChildCare,
-                contentDescription = "Есть ребёнок",
+                contentDescription = "Был один ребёнок",
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .size(13.dp)
+                    .size(20.dp)
                     .padding(1.dp),
                 tint = Color(0xFFEF6C00),
             )
@@ -845,7 +845,7 @@ private fun NoteDialog(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = hasChild, onCheckedChange = { hasChild = it })
-                    Text(if (isPrivate) "В доме есть ребёнок" else "В квартире есть ребёнок")
+                    Text(if (isPrivate) "В доме был один ребёнок" else "В квартире был один ребёнок")
                 }
             }
         },
@@ -903,10 +903,10 @@ private fun HouseTile(
         if (house.hasChild) {
             Icon(
                 Icons.Default.ChildCare,
-                contentDescription = "Есть ребёнок",
+                contentDescription = "Был один ребёнок",
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .size(14.dp)
+                    .size(22.dp)
                     .padding(1.dp),
                 tint = Color(0xFFEF6C00),
             )

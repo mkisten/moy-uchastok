@@ -29,8 +29,8 @@ android {
         applicationId = "ru.obkhod.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "1.3.7"
+        versionCode = 18
+        versionName = "1.3.8"
         vectorDrawables { useSupportLibrary = true }
         manifestPlaceholders["googleRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
         manifestPlaceholders["appAuthRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"

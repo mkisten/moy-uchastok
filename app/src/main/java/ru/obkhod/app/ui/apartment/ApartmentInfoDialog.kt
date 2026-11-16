@@ -83,7 +83,7 @@ fun ApartmentInfoDialog(
                 Text("Подъезд: ${info.entranceNumber} · Этаж: ${info.floorNumber}")
                 Text("Статус: ${statusLabel(info.status)}")
                 if (info.hasChild) {
-                    Text("👶 В квартире есть ребёнок", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary)
+                    Text("👶 ${if (isPrivate) "В доме" else "В квартире"} был один ребёнок", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary)
                 }
                 Text("Последний обход: ${formatDateTime(info.lastVisitAt)}")
                 if (!info.phone.isNullOrBlank()) {
