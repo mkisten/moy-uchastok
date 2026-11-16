@@ -29,8 +29,8 @@ android {
         applicationId = "ru.obkhod.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.3.0"
+        versionCode = 11
+        versionName = "1.3.1"
         vectorDrawables { useSupportLibrary = true }
         manifestPlaceholders["googleRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
         manifestPlaceholders["appAuthRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
@@ -86,6 +86,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("net.openid:appauth:0.11.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     val room = "2.6.1"
     implementation("androidx.room:room-runtime:$room")
