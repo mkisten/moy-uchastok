@@ -843,6 +843,10 @@ private fun NoteDialog(
                     label = { Text("Комментарий") },
                     minLines = 3, modifier = Modifier.fillMaxWidth(),
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = hasChild, onCheckedChange = { hasChild = it })
+                    Text(if (isPrivate) "В доме есть ребёнок" else "В квартире есть ребёнок")
+                }
             }
         },
         confirmButton = {
