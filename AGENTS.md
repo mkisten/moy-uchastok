@@ -129,7 +129,16 @@ MIGRATION_2_3) → `entrances` (CASCADE) → `floors` (CASCADE) → `apartments`
   полный: подъезд → участок → список. runBlocking в onCreate удалён. MIUI-телефон
   (FEPV9XTC4DSOTOHU) блокирует adb input injection — UI-тесты на телефоне делать руками
   пользователя, автоматизация только на BlueStacks (127.0.0.1:5555).
-  Текущая версия 1.3.6 (versionCode 16), релиз v1.3.6 на GitHub.
+  Текущая версия 1.3.9 (versionCode 19), релиз v1.3.9 на GitHub.
+  Статусы «Грубый отказ» (ROUGH_REFUSED, ярко-красный E53935) и «Ребёнок» (CHILD, голубой
+  90CAF9) добавлены в Status enum (v1.2.x-эпоха hasChild осталась в БД; Room v6 MIGRATION_5_6
+  конвертирует hasChild=1 → status CHILD). Статус-меню: карточки Грубый отказ (full-width,
+  белый текст) и Ребёнок (голубой + ChildCare). Фильтры/chips/экспорт-сводка расширены
+  (Excel: колонки «Грубый отказ», «Ребёнок»). История показывает день недели
+  (format EEEE,dd.MM.yyyy HH:mm, Locale("ru")). Шапка экрана подъезда — полный адрес
+  (bodyMedium, maxLines 2) над «Подъезд № N». Галочки hasVisits с плиток убраны.
+  Трубка на плитке — белый кружок 16dp слева сверху с Call 11dp, ТОЛЬКО числовые телефоны
+  ([0-9]{5,}+; текст не показывает), неактивная.
   Отметка «Ребёнок» (v1.3.6): ApartmentEntity.hasChild (Room v5, MIGRATION_4_5:
   ALTER TABLE apartments ADD COLUMN hasChild INTEGER NOT NULL DEFAULT 0); чекбокс в
   заметке (NoteDialog/NoteDialogPublic, onSaveNote — 4 аргумента с Boolean); на плитке
