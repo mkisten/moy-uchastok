@@ -25,22 +25,27 @@ data class Statistics(
     val noOneHome: Int = 0,
     val repeat: Int = 0,
     val nonResidential: Int = 0,
+    val roughRefused: Int = 0,
+    val child: Int = 0,
 ) {
     companion object {
         fun of(statuses: List<Status>, visitedIds: Set<Long>, ids: List<Long>): Statistics {
             var refused = 0; var noOne = 0; var repeat = 0; var non = 0
+            var rough = 0; var child = 0
             statuses.forEach {
                 when (it) {
                     Status.REFUSED -> refused++
                     Status.NO_ONE_HOME -> noOne++
                     Status.REPEAT -> repeat++
                     Status.NON_RESIDENTIAL -> non++
+                    Status.ROUGH_REFUSED -> rough++
+                    Status.CHILD -> child++
                     Status.NONE -> {}
                 }
             }
             val visited = ids.count { it in visitedIds }
             val total = ids.size
-            return Statistics(total, visited, total - visited, refused, noOne, repeat, non)
+            return Statistics(total, visited, total - visited, refused, noOne, repeat, non, rough, child)
         }
     }
 }

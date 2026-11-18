@@ -76,7 +76,7 @@ class ExcelExporter {
             wb.createSheet("Сводка").apply {
                 fillSheet(
                     this, headerStyle,
-                    headers = listOf("Участок", "Количество подъездов", "Количество этажей", "Всего квартир", "Обработано", "Без обхода", "Отказ", "Нет дома", "Повтор", "Не жилые"),
+                    headers = listOf("Участок", "Количество подъездов", "Количество этажей", "Всего квартир", "Обработано", "Без обхода", "Отказ", "Нет дома", "Повтор", "Не жилые", "Грубый отказ", "Ребёнок"),
                 ) { row ->
                     var r0 = row
                     data.summaries.forEach { r ->
@@ -91,6 +91,8 @@ class ExcelExporter {
                         line.cell(7, r.stats.noOneHome)
                         line.cell(8, r.stats.repeat)
                         line.cell(9, r.stats.nonResidential)
+                        line.cell(10, r.stats.roughRefused)
+                        line.cell(11, r.stats.child)
                     }
                     r0
                 }

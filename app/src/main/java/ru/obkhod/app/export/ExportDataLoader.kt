@@ -133,9 +133,11 @@ class ExportDataLoader(private val db: AppDatabase) {
     companion object {
         fun statusLabel(status: Status): String = when (status) {
             Status.REFUSED -> "Отказ"
+            Status.ROUGH_REFUSED -> "Грубый отказ"
             Status.NO_ONE_HOME -> "Нет дома"
             Status.REPEAT -> "Повтор"
             Status.NON_RESIDENTIAL -> "Не жилая"
+            Status.CHILD -> "Ребёнок"
             Status.NONE -> "Без статуса"
         }
 

@@ -105,7 +105,7 @@ data class VisitHistoryEntity(
 )
 
 /** Статусы квартиры (п. 7 ТЗ). */
-enum class Status { NONE, REFUSED, NO_ONE_HOME, REPEAT, NON_RESIDENTIAL }
+enum class Status { NONE, REFUSED, NO_ONE_HOME, REPEAT, NON_RESIDENTIAL, ROUGH_REFUSED, CHILD }
 
 /** Типы событий истории посещений (п. 14 ТЗ). */
 enum class EventType { VISIT, RESET, CORRECTION }

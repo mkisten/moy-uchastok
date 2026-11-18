@@ -268,6 +268,8 @@ private fun AreaCardView(card: AreaCard, onClick: () -> Unit, onMenu: () -> Unit
                         StatusChip("Нет дома", card.stats.noOneHome, ru.obkhod.app.ui.entrance.statusColor(ru.obkhod.app.data.db.Status.NO_ONE_HOME))
                         StatusChip("Повтор", card.stats.repeat, ru.obkhod.app.ui.entrance.statusColor(ru.obkhod.app.data.db.Status.REPEAT))
                         StatusChip("Нежил.", card.stats.nonResidential, ru.obkhod.app.ui.entrance.statusColor(ru.obkhod.app.data.db.Status.NON_RESIDENTIAL))
+                        StatusChip("Груб. отказ", card.stats.roughRefused, ru.obkhod.app.ui.entrance.statusColor(ru.obkhod.app.data.db.Status.ROUGH_REFUSED))
+                        StatusChip("Ребёнок", card.stats.child, ru.obkhod.app.ui.entrance.statusColor(ru.obkhod.app.data.db.Status.CHILD))
                         StatusChip("Без обхода", card.stats.withoutVisit, Color(0xFFF1F3F1))
                     }
                 }

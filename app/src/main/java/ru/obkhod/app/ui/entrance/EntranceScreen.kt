@@ -53,13 +53,16 @@ import ru.obkhod.app.data.repo.Statistics
 enum class Filter(val label: String) {
     ALL("Все"), REPEAT("Повтор"), NOT_VISITED("Без обхода"),
     REFUSED("Отказ"), NO_ONE_HOME("Нет дома"), NON_RESIDENTIAL("Не жилая"),
+    ROUGH_REFUSED("Грубый отказ"), CHILD("Ребёнок"),
 }
 
 fun statusColor(status: Status): Color = when (status) {
     Status.REFUSED -> Color(0xFFFFCDD2)        // красный светлый
+    Status.ROUGH_REFUSED -> Color(0xFFE53935)  // грубый отказ — ярко-красный
     Status.NO_ONE_HOME -> Color(0xFFFFF59D)    // жёлтый
     Status.REPEAT -> Color(0xFFC8E6C9)         // зелёный
     Status.NON_RESIDENTIAL -> Color(0xFFCFD8DC) // серый
+    Status.CHILD -> Color(0xFF90CAF9)          // ребёнок — голубой
     Status.NONE -> Color(0xFFF1F3F1)           // светло-серый
 }
 
@@ -117,7 +120,24 @@ fun EntranceScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(if (isPrivate) areaName else "$areaName · Подъезд № $entranceNumber") },
+                title = {
+                    // Полный адрес над кнопками, уменьшенный шрифт, без обрезки
+                    Column {
+                        Text(
+                            areaName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                        )
+                        if (!isPrivate) {
+                            Text(
+                                "Подъезд № $entranceNumber",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
                 },
@@ -174,7 +194,8 @@ fun EntranceScreen(
                             }
                             Text(
                                 "Отказ: ${statistics.refused} · Нет дома: ${statistics.noOneHome} · " +
-                                    "Повтор: ${statistics.repeat} · Не жилые: ${statistics.nonResidential}",
+                                    "Повтор: ${statistics.repeat} · Не жилые: ${statistics.nonResidential}" +
+                                    " · Груб. отказ: ${statistics.roughRefused} · Ребёнок: ${statistics.child}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -196,6 +217,8 @@ fun EntranceScreen(
                                             Filter.REFUSED -> apt.status == Status.REFUSED
                                             Filter.NO_ONE_HOME -> apt.status == Status.NO_ONE_HOME
                                             Filter.NON_RESIDENTIAL -> apt.status == Status.NON_RESIDENTIAL
+                                            Filter.ROUGH_REFUSED -> apt.status == Status.ROUGH_REFUSED
+                                            Filter.CHILD -> apt.status == Status.CHILD
                                             Filter.ALL -> true
                                         }
                                     }
@@ -225,6 +248,8 @@ fun EntranceScreen(
                         Filter.REFUSED -> apt.status == Status.REFUSED
                         Filter.NO_ONE_HOME -> apt.status == Status.NO_ONE_HOME
                         Filter.NON_RESIDENTIAL -> apt.status == Status.NON_RESIDENTIAL
+                        Filter.ROUGH_REFUSED -> apt.status == Status.ROUGH_REFUSED
+                        Filter.CHILD -> apt.status == Status.CHILD
                     }
                     val bySearch = searchQuery.isBlank() ||
                         apt.label.contains(searchQuery.trim(), ignoreCase = true)
@@ -434,6 +459,19 @@ fun EntranceScreen(
                         modifier = Modifier.weight(1f),
                     ) { onSetStatus(apt.id, Status.NON_RESIDENTIAL, false); actionFor = null }
                 }
+                Spacer(Modifier.height(10.dp))
+                // Грубый отказ — ярко-красная карточка на всю ширину
+                StatusCard(
+                    label = "Грубый отказ", color = Color(0xFFE53935), contentColor = Color.White,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { onSetStatus(apt.id, Status.ROUGH_REFUSED, false); actionFor = null }
+                Spacer(Modifier.height(10.dp))
+                // Ребёнок — голубая карточка с иконкой ребёнка
+                StatusCard(
+                    label = "Ребёнок", color = statusColor(Status.CHILD), contentColor = Color(0xFF0D47A1),
+                    icon = Icons.Default.ChildCare,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { onSetStatus(apt.id, Status.CHILD, false); actionFor = null }
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -616,6 +654,8 @@ private fun FloorRow(
         Filter.REFUSED -> apt.status == Status.REFUSED
         Filter.NO_ONE_HOME -> apt.status == Status.NO_ONE_HOME
         Filter.NON_RESIDENTIAL -> apt.status == Status.NON_RESIDENTIAL
+        Filter.ROUGH_REFUSED -> apt.status == Status.ROUGH_REFUSED
+        Filter.CHILD -> apt.status == Status.CHILD
     }
 
     val hovered = drag.hoverFloorId == floor.floor.id && drag.draggingId != null
@@ -783,18 +823,6 @@ private fun ApartmentTile(
             color = Color(0xFF263238),
             modifier = Modifier.align(Alignment.Center).padding(horizontal = 4.dp),
         )
-        // Галочка «обработано»: квартира посещалась (по истории, даже если статус сброшен)
-        if (apartment.hasVisits) {
-            Icon(
-                Icons.Default.Check,
-                contentDescription = "Обход зарегистрирован",
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(11.dp)
-                    .padding(1.dp),
-                tint = Color(0xFF2E7D32),
-            )
-        }
         if (apartment.hasNote) {
             val iconInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             Icon(
@@ -921,17 +949,6 @@ private fun HouseTile(
             color = Color(0xFF263238),
             modifier = Modifier.align(Alignment.Center).padding(horizontal = 6.dp),
         )
-        if (house.hasVisits) {
-            Icon(
-                Icons.Default.Check,
-                contentDescription = "Обход зарегистрирован",
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(12.dp)
-                    .padding(1.dp),
-                tint = Color(0xFF2E7D32),
-            )
-        }
         if (house.hasNote) {
             val iconInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             Icon(
