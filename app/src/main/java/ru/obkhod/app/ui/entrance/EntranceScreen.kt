@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoveUp
 import androidx.compose.material.icons.filled.Search
@@ -92,6 +93,7 @@ fun EntranceScreen(
     onMove: (Long, Long, (String?) -> Unit) -> Unit,
     onDelete: (Long) -> Unit,
     onRestore: (Long) -> Unit = {},
+    onOpenHistory: (Long) -> Unit = {},
     onEditApartment: (Long, Long?, String, Boolean, (String?) -> Unit) -> Unit,
     onEditEntrance: () -> Unit,
     onAddFloor: (Int) -> Unit,
@@ -511,6 +513,9 @@ fun EntranceScreen(
                 if (!isPrivate) {
                     SheetAction(icon = Icons.Default.MoveUp, label = "Переместить на этаж") {
                         moveFor = apt; longPressFor = null
+                    }
+                SheetAction(icon = Icons.Default.History, label = "История посещений") {
+                        onOpenHistory(apt.id); longPressFor = null
                     }
                 }
                 SheetAction(icon = Icons.Default.Edit, label = "Заметка") {

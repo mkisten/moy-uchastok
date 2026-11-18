@@ -134,7 +134,6 @@ fun AppNavHost(
             // Обычно на этот маршрут для PRIVATE не попадаем: AreasScreen открывает схему домов
             // напрямую. Если маршрут всё же открыт — плитка «Подъезд № 1» ведёт к домам.
             AreaScreen(
-                isPrivate = isPrivateArea,
                 areaName = name,
                 cards = cards,
                 onOpenEntrance = { nav.navigate(Routes.entrance(it)) },
@@ -171,6 +170,7 @@ fun AppNavHost(
                 onSetStatus = { id, status, corr -> vm.setStatus(id, status, corr) },
                 onResetStatus = { vm.resetStatus(it) },
                 onSaveNote = { id, phone, comment -> vm.saveNote(id, phone, comment) },
+                onOpenHistory = { historyForId = it },
                 onMove = { id, floorId, onResult -> vm.move(id, floorId, onResult) },
                 onDelete = { vm.delete(it) },
                 onRestore = { id -> vm.restore(id) },
