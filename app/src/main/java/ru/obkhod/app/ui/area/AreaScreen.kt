@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.obkhod.app.data.db.EntranceEntity
 import ru.obkhod.app.data.db.FloorEntity
@@ -46,7 +47,17 @@ fun AreaScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(areaName) },
+                title = {
+                    // Полное название участка над кнопками, уменьшенный шрифт, без обрезки
+                    Column {
+                        Text(
+                            areaName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 3,
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
                 },

@@ -66,7 +66,6 @@ class EntranceViewModel(app: Application, private val entranceId: Long) : Androi
             lastVisitAt = apt.lastVisitAt,
             phone = apt.phone,
             comment = apt.comment,
-            hasChild = apt.hasChild,
             hasVisits = apt.hasVisits,
         )
     }
@@ -76,8 +75,8 @@ class EntranceViewModel(app: Application, private val entranceId: Long) : Androi
 
     fun resetStatus(id: Long) = viewModelScope.launch { repo.resetStatus(id) }
 
-    fun saveNote(id: Long, phone: String?, comment: String?, hasChild: Boolean) =
-        viewModelScope.launch { repo.saveNote(id, phone, comment, hasChild) }
+    fun saveNote(id: Long, phone: String?, comment: String?) =
+        viewModelScope.launch { repo.saveNote(id, phone, comment) }
 
     fun move(id: Long, floorId: Long, onResult: (String?) -> Unit) = viewModelScope.launch {
         when (repo.moveApartment(id, floorId)) {

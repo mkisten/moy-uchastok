@@ -88,7 +88,7 @@ fun EntranceScreen(
     onBack: () -> Unit,
     onSetStatus: (Long, Status, Boolean) -> Unit,
     onResetStatus: (Long) -> Unit,
-    onSaveNote: (Long, String?, String?, Boolean) -> Unit,
+    onSaveNote: (Long, String?, String?) -> Unit,
     onMove: (Long, Long, (String?) -> Unit) -> Unit,
     onDelete: (Long) -> Unit,
     onRestore: (Long) -> Unit = {},
@@ -460,18 +460,18 @@ fun EntranceScreen(
                     ) { onSetStatus(apt.id, Status.NON_RESIDENTIAL, false); actionFor = null }
                 }
                 Spacer(Modifier.height(10.dp))
-                // Грубый отказ — ярко-красная карточка на всю ширину
-                StatusCard(
-                    label = "Грубый отказ", color = Color(0xFFE53935), contentColor = Color.White,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { onSetStatus(apt.id, Status.ROUGH_REFUSED, false); actionFor = null }
-                Spacer(Modifier.height(10.dp))
-                // Ребёнок — голубая карточка с иконкой ребёнка
-                StatusCard(
-                    label = "Ребёнок", color = statusColor(Status.CHILD), contentColor = Color(0xFF0D47A1),
-                    icon = Icons.Default.ChildCare,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { onSetStatus(apt.id, Status.CHILD, false); actionFor = null }
+                // Грубый отказ (ярко-красный) и Ребёнок (голубой со значком) — в одном ряду
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatusCard(
+                        label = "Грубый отказ", color = Color(0xFFE53935), contentColor = Color.White,
+                        modifier = Modifier.weight(1f),
+                    ) { onSetStatus(apt.id, Status.ROUGH_REFUSED, false); actionFor = null }
+                    StatusCard(
+                        label = "Ребёнок", color = statusColor(Status.CHILD), contentColor = Color(0xFF0D47A1),
+                        icon = Icons.Default.ChildCare,
+                        modifier = Modifier.weight(1f),
+                    ) { onSetStatus(apt.id, Status.CHILD, false); actionFor = null }
+                }
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -566,7 +566,7 @@ fun EntranceScreen(
             apartment = apt,
             isPrivate = isPrivate,
             onDismiss = { noteFor = null },
-            onSave = { phone, comment, hasChild -> onSaveNote(apt.id, phone, comment, hasChild); noteFor = null },
+            onSave = { phone, comment -> onSaveNote(apt.id, phone, comment); noteFor = null },
         )
     }
 
@@ -801,16 +801,16 @@ private fun ApartmentTile(
                 )
             }
         }
-        // Отметка «ребёнок» — слева снизу
-        if (apartment.hasChild) {
+        // Статус «Ребёнок» — логотип ребёнка в нижнем левом углу (крупный, заметный)
+        if (apartment.status == Status.CHILD) {
             Icon(
                 Icons.Default.ChildCare,
-                contentDescription = "Был один ребёнок",
+                contentDescription = "Ребёнок",
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .size(20.dp)
                     .padding(1.dp),
-                tint = Color(0xFFEF6C00),
+                tint = Color(0xFF0D47A1),
             )
         }
         Text(
@@ -850,11 +850,10 @@ private fun NoteDialog(
     apartment: ApartmentUi?,
     isPrivate: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (String?, String?, Boolean) -> Unit,
+    onSave: (String?, String?) -> Unit,
 ) {
     var phone by remember { mutableStateOf(apartment?.phone ?: "") }
     var comment by remember { mutableStateOf(apartment?.comment ?: "") }
-    var hasChild by remember { mutableStateOf(apartment?.hasChild ?: false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isPrivate) "Заметка — дом № ${apartment?.label ?: ""}" else "Заметка — квартира № ${apartment?.label ?: ""}") },
@@ -871,15 +870,11 @@ private fun NoteDialog(
                     label = { Text("Комментарий") },
                     minLines = 3, modifier = Modifier.fillMaxWidth(),
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = hasChild, onCheckedChange = { hasChild = it })
-                    Text(if (isPrivate) "В доме был один ребёнок" else "В квартире был один ребёнок")
-                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                onSave(phone.ifBlank { null }, comment.ifBlank { null }, hasChild)
+                onSave(phone.ifBlank { null }, comment.ifBlank { null })
             }) { Text("Сохранить") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
@@ -927,16 +922,15 @@ private fun HouseTile(
                 )
             }
         }
-        // Отметка «ребёнок» — слева снизу
-        if (house.hasChild) {
+        if (house.status == Status.CHILD) {
             Icon(
                 Icons.Default.ChildCare,
-                contentDescription = "Был один ребёнок",
+                contentDescription = "Ребёнок",
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .size(22.dp)
                     .padding(1.dp),
-                tint = Color(0xFFEF6C00),
+                tint = Color(0xFF0D47A1),
             )
         }
         Text(
