@@ -51,20 +51,19 @@ fun AreaScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
                 },
-                title = {},
+                // Название участка на одном уровне со стрелкой «Назад», без обрезки
+                title = {
+                    Text(
+                        areaName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 3,
+                    )
+                },
             )
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            // Полный адрес участка — с самого верха, над кнопками, без обрезки
-            Text(
-                areaName,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
             // Кнопки действий
             Row(
                 Modifier
