@@ -469,7 +469,7 @@ fun EntranceScreen(
                         modifier = Modifier.weight(1f),
                     ) { onSetStatus(apt.id, Status.ROUGH_REFUSED, false); actionFor = null }
                     StatusCard(
-                        label = "Ребёнок", color = statusColor(Status.CHILD), contentColor = Color(0xFF0D47A1),
+                        label = "Ребенок один дома", color = statusColor(Status.CHILD), contentColor = Color(0xFF0D47A1),
                         icon = Icons.Default.ChildCare,
                         modifier = Modifier.weight(1f),
                     ) { onSetStatus(apt.id, Status.CHILD, false); actionFor = null }

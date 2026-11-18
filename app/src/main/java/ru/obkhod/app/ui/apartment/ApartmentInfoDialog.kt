@@ -22,10 +22,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val format = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+private val formatPlain = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+private val weekdays = arrayOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
-fun formatDateTime(ts: Long?): String =
-    ts?.let { format.format(Date(it)) } ?: "Обход не проводился"
+fun formatDateTime(ts: Long?): String {
+    ts ?: return "Обход не проводился"
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = ts }
+    // Calendar.DAY_OF_WEEK: 1 = воскресенье … 7 = суббота → индекс в массиве, начинающемся с Пн
+    val weekday = weekdays[(cal.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7]
+    return "$weekday, ${formatPlain.format(Date(ts))}"
+}
 
 fun statusLabel(status: Status?): String = when (status) {
     Status.REFUSED -> "Отказ"
@@ -33,7 +39,7 @@ fun statusLabel(status: Status?): String = when (status) {
     Status.NO_ONE_HOME -> "Нет дома"
     Status.REPEAT -> "Повтор"
     Status.NON_RESIDENTIAL -> "Не жилая"
-    Status.CHILD -> "Ребёнок"
+    Status.CHILD -> "Ребенок один дома"
     Status.NONE, null -> "Без статуса"
 }
 
@@ -83,7 +89,7 @@ fun ApartmentInfoDialog(
                 Text("Подъезд: ${info.entranceNumber} · Этаж: ${info.floorNumber}")
                 Text("Статус: ${statusLabel(info.status)}")
                 if (info.status == Status.CHILD) {
-                    Text("👶 ${if (isPrivate) "В доме" else "В квартире"} был один ребёнок", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary)
+                    Text("👶 ${if (isPrivate) "В доме" else "В квартире"} ребенок один дома", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary)
                 }
                 Text("Последний обход: ${formatDateTime(info.lastVisitAt)}")
                 if (!info.phone.isNullOrBlank()) {

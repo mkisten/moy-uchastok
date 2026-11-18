@@ -137,7 +137,7 @@ class ExportDataLoader(private val db: AppDatabase) {
             Status.NO_ONE_HOME -> "Нет дома"
             Status.REPEAT -> "Повтор"
             Status.NON_RESIDENTIAL -> "Не жилая"
-            Status.CHILD -> "Ребёнок"
+            Status.CHILD -> "Ребенок один дома"
             Status.NONE -> "Без статуса"
         }
 
