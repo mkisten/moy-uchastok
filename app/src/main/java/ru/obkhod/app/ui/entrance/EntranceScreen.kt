@@ -34,6 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -514,12 +515,6 @@ fun EntranceScreen(
                     SheetAction(icon = Icons.Default.MoveUp, label = "Переместить на этаж") {
                         moveFor = apt; longPressFor = null
                     }
-                SheetAction(icon = Icons.Default.History, label = "История посещений") {
-                        onOpenHistory(apt.id); longPressFor = null
-                    }
-                }
-                SheetAction(icon = Icons.Default.Edit, label = "Заметка") {
-                    noteFor = apt; longPressFor = null
                 }
                 SheetAction(icon = Icons.Default.Info, label = "Информация") {
                     onOpenInfo(apt.id); longPressFor = null
@@ -808,6 +803,30 @@ private fun ApartmentTile(
                     tint = Color(0xFF1B5E20),
                 )
             }
+        } else if (!apartment.phone.isNullOrBlank()) {
+            // Телефон записан текстом — перечёркнутая трубка
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .size(16.dp),
+            ) {
+                Icon(
+                    Icons.Default.Call,
+                    contentDescription = "Телефон записан текстом",
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(12.dp),
+                    tint = Color(0xFF9E9E9E),
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .rotate(45f)
+                        .background(Color(0xFFD32F2F)),
+                )
+            }
         }
         // Статус «Ребёнок» — логотип ребёнка в нижнем левом углу (крупный, заметный)
         if (apartment.status == Status.CHILD) {
@@ -922,6 +941,30 @@ private fun HouseTile(
                     contentDescription = "Есть телефон",
                     modifier = Modifier.size(11.dp),
                     tint = Color(0xFF1B5E20),
+                )
+            }
+        } else if (!house.phone.isNullOrBlank()) {
+            // Телефон записан текстом — перечёркнутая трубка
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .size(16.dp),
+            ) {
+                Icon(
+                    Icons.Default.Call,
+                    contentDescription = "Телефон записан текстом",
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(12.dp),
+                    tint = Color(0xFF9E9E9E),
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .rotate(45f)
+                        .background(Color(0xFFD32F2F)),
                 )
             }
         }

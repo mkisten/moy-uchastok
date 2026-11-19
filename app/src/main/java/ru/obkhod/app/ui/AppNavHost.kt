@@ -186,11 +186,17 @@ fun AppNavHost(
                 onOpenInfo = { infoForId = it },
             )
 
+            // История для окна «Информация»
+            val detailsId: Long? = infoForId
+            val infoHistoryFlow = if (detailsId != null) vm.historyFlow(detailsId) else null
+            val infoHistory by (infoHistoryFlow ?: flowOfNull())
+                .collectAsState(initial = emptyList<ru.obkhod.app.data.db.VisitHistoryEntity>())
             // Информационное окно квартиры (п. 9)
             infoForId?.let { id ->
                 vm.infoFor(id, scheme)?.let { info ->
                     ru.obkhod.app.ui.apartment.ApartmentInfoDialog(
                         info = info,
+                        history = infoHistory,
                         isPrivate = isPrivate,
                         onDismiss = { infoForId = null },
                         onEditNote = { infoForId = null; noteForId = id },

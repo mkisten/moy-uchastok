@@ -74,6 +74,7 @@ data class ApartmentInfo(
 @Composable
 fun ApartmentInfoDialog(
     info: ApartmentInfo,
+    history: List<VisitHistoryEntity> = emptyList(),
     isPrivate: Boolean = false,
     onDismiss: () -> Unit,
     onEditNote: () -> Unit,
@@ -108,15 +109,32 @@ fun ApartmentInfoDialog(
                 if (!info.comment.isNullOrBlank()) {
                     Text("Комментарий: ${info.comment}")
                 }
+                Spacer(Modifier.height(8.dp))
+                Text("История:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                if (history.isEmpty()) {
+                    Text("Обход не проводился", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Column(Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState())) {
+                        history.forEach { rec ->
+                            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(6.dp)) {
+                                    Text(formatDateTime(rec.visitDate), style = MaterialTheme.typography.labelMedium)
+                                    Text(
+                                        statusLabelByName(rec.previousStatus) + " → " + statusLabelByName(rec.newStatus) +
+                                            " · " + eventTypeLabel(rec.eventType),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = onEditNote) {
                     Icon(Icons.Default.Edit, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Заметка")
-                }
-                TextButton(onClick = onOpenHistory) {
-                    Icon(Icons.Default.History, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("История")
                 }
             }
         },
