@@ -430,10 +430,10 @@ fun EntranceScreen(
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatusCard(
-                        label = "Заметка", color = MaterialTheme.colorScheme.surfaceVariant,
+                        label = "Информация", color = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        icon = Icons.Default.Edit, modifier = Modifier.weight(1f),
-                    ) { noteFor = apt; actionFor = null }
+                        icon = Icons.Default.Info, modifier = Modifier.weight(1f),
+                    ) { onOpenInfo(apt.id); actionFor = null }
                     StatusCard(
                         label = "Сброс", color = Color(0xFFF1F3F1),
                         contentColor = Color(0xFF37474F),
@@ -516,9 +516,7 @@ fun EntranceScreen(
                         moveFor = apt; longPressFor = null
                     }
                 }
-                SheetAction(icon = Icons.Default.Info, label = "Информация") {
-                    onOpenInfo(apt.id); longPressFor = null
-                }
+
                 SheetAction(
                     icon = Icons.Default.Delete,
                     label = if (isPrivate) "Удалить дом" else "Удалить квартиру",
@@ -787,7 +785,9 @@ private fun ApartmentTile(
             },
     ) {
         // Телефон записан цифрами — маленькая неактивная трубка в кружке слева сверху
-        val numericPhone = apartment.phone?.matches(Regex("[0-9()+-]{5,}")) == true
+        val numericPhone = apartment.phone?.let { p ->
+            p.none { it.isLetter() } && p.count { it.isDigit() } >= 5
+        } == true
         if (numericPhone) {
             Box(
                 Modifier
@@ -927,7 +927,9 @@ private fun HouseTile(
                 onClick = onTap,
             ),
     ) {
-        val numericHousePhone = house.phone?.matches(Regex("[0-9()+-]{5,}")) == true
+        val numericHousePhone = house.phone?.let { p ->
+            p.none { it.isLetter() } && p.count { it.isDigit() } >= 5
+        } == true
         if (numericHousePhone) {
             Box(
                 Modifier
