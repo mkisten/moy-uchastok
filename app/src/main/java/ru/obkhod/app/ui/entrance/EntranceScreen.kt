@@ -810,21 +810,22 @@ private fun ApartmentTile(
                     .align(Alignment.TopStart)
                     .size(16.dp),
             ) {
+                // Линия перечёркивания — ПОД иконкой, направление сверху-слева вниз-вправо
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .rotate(-45f)
+                        .background(Color(0xFFD32F2F)),
+                )
                 Icon(
                     Icons.Default.Call,
                     contentDescription = "Телефон записан текстом",
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(12.dp),
-                    tint = Color(0xFF9E9E9E),
-                )
-                Box(
-                    Modifier
-                        .align(Alignment.Center)
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .rotate(45f)
-                        .background(Color(0xFFD32F2F)),
+                    tint = Color(0xFF616161),
                 )
             }
         }
@@ -952,21 +953,22 @@ private fun HouseTile(
                     .align(Alignment.TopStart)
                     .size(16.dp),
             ) {
+                // Линия перечёркивания — ПОД иконкой, направление сверху-слева вниз-вправо
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .rotate(-45f)
+                        .background(Color(0xFFD32F2F)),
+                )
                 Icon(
                     Icons.Default.Call,
                     contentDescription = "Телефон записан текстом",
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(12.dp),
-                    tint = Color(0xFF9E9E9E),
-                )
-                Box(
-                    Modifier
-                        .align(Alignment.Center)
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .rotate(45f)
-                        .background(Color(0xFFD32F2F)),
+                    tint = Color(0xFF616161),
                 )
             }
         }
