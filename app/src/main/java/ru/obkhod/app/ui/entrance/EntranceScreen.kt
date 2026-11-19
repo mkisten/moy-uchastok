@@ -521,6 +521,9 @@ fun EntranceScreen(
                 SheetAction(icon = Icons.Default.Edit, label = "Заметка") {
                     noteFor = apt; longPressFor = null
                 }
+                SheetAction(icon = Icons.Default.Info, label = "Информация") {
+                    onOpenInfo(apt.id); longPressFor = null
+                }
                 SheetAction(
                     icon = Icons.Default.Delete,
                     label = if (isPrivate) "Удалить дом" else "Удалить квартиру",
@@ -829,18 +832,13 @@ private fun ApartmentTile(
             modifier = Modifier.align(Alignment.Center).padding(horizontal = 4.dp),
         )
         if (apartment.hasNote) {
-            val iconInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            // Неактивный индикатор заметки; вся информация — в меню долгого нажатия → «Информация»
             Icon(
                 Icons.Default.Info,
                 contentDescription = "Есть заметка",
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .size(14.dp)
-                    .clickable(
-                        interactionSource = iconInteraction,
-                        indication = null,
-                        onClick = onInfo,
-                    ),
+                    .size(14.dp),
                 tint = Color(0xFF455A64),
             )
         }
@@ -949,18 +947,13 @@ private fun HouseTile(
             modifier = Modifier.align(Alignment.Center).padding(horizontal = 6.dp),
         )
         if (house.hasNote) {
-            val iconInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            // Неактивный индикатор заметки; вся информация — в меню долгого нажатия → «Информация»
             Icon(
                 Icons.Default.Info,
                 contentDescription = "Есть заметка",
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .size(14.dp)
-                    .clickable(
-                        interactionSource = iconInteraction,
-                        indication = null,
-                        onClick = onInfo,
-                    ),
+                    .size(14.dp),
                 tint = Color(0xFF455A64),
             )
         }
