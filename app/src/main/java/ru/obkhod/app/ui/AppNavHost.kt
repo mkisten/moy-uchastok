@@ -199,8 +199,7 @@ fun AppNavHost(
                         history = infoHistory,
                         isPrivate = isPrivate,
                         onDismiss = { infoForId = null },
-                        onEditNote = { infoForId = null; noteForId = id },
-                        onOpenHistory = { infoForId = null; historyForId = id },
+                        onSaveNote = { phone, comment -> vm.saveNote(id, phone, comment) },
                     )
                 }
             }

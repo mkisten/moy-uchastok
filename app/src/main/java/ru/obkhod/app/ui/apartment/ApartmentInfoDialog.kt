@@ -3,6 +3,8 @@ package ru.obkhod.app.ui.apartment
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -77,11 +79,12 @@ fun ApartmentInfoDialog(
     history: List<VisitHistoryEntity> = emptyList(),
     isPrivate: Boolean = false,
     onDismiss: () -> Unit,
-    onEditNote: () -> Unit,
-    onOpenHistory: () -> Unit,
+    onSaveNote: (String?, String?) -> Unit,
 ) {
     val context = LocalContext.current
     val noun = if (isPrivate) "Дом" else "Квартира"
+    var phoneText by remember { mutableStateOf(info.phone ?: "") }
+    var commentText by remember { mutableStateOf(info.comment ?: "") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("$noun № ${info.label}") },
@@ -93,22 +96,34 @@ fun ApartmentInfoDialog(
                     Text("👶 ${if (isPrivate) "В доме" else "В квартире"} ребенок один дома", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary)
                 }
                 Text("Последний обход: ${formatDateTime(info.lastVisitAt)}")
-                if (!info.phone.isNullOrBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(info.phone, fontWeight = FontWeight.SemiBold)
-                        IconButton(
-                            onClick = {
-                                // ACTION_DIAL открывает набор номера без совершения звонка (п. 9)
-                                context.startActivity(
-                                    Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(info.phone)}"))
-                                )
-                            },
-                        ) { Icon(Icons.Default.Call, contentDescription = "Позвонить") }
-                    }
-                }
-                if (!info.comment.isNullOrBlank()) {
-                    Text("Комментарий: ${info.comment}")
-                }
+                OutlinedTextField(
+                    value = phoneText,
+                    onValueChange = { phoneText = it },
+                    label = { Text("Телефон") },
+                    supportingText = { Text("Можно с +, пробелами и дефисами") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    trailingIcon = {
+                        if (phoneText.isNotBlank()) {
+                            IconButton(
+                                onClick = {
+                                    // ACTION_DIAL открывает набор номера без совершения звонка (п. 9)
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(phoneText)}"))
+                                    )
+                                },
+                            ) { Icon(Icons.Default.Call, contentDescription = "Позвонить") }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = commentText,
+                    onValueChange = { commentText = it },
+                    label = { Text("Комментарий") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(8.dp))
                 Text("История:", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 if (history.isEmpty()) {
@@ -132,13 +147,10 @@ fun ApartmentInfoDialog(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onEditNote) {
-                    Icon(Icons.Default.Edit, contentDescription = null); Spacer(Modifier.width(4.dp)); Text("Заметка")
-                }
-            }
+            TextButton(onClick = {
+                onSaveNote(phoneText.trim().ifBlank { null }, commentText.trim().ifBlank { null })
+            }) { Text("Сохранить") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
     )
 }
 
