@@ -850,7 +850,7 @@ private fun ApartmentTile(
             color = Color(0xFF263238),
             modifier = Modifier.align(Alignment.Center).padding(horizontal = 4.dp),
         )
-        if (apartment.hasNote) {
+        if (!apartment.comment.isNullOrBlank()) {
             // Неактивный индикатор заметки; вся информация — в меню долгого нажатия → «Информация»
             Icon(
                 Icons.Default.Info,
@@ -991,7 +991,7 @@ private fun HouseTile(
             color = Color(0xFF263238),
             modifier = Modifier.align(Alignment.Center).padding(horizontal = 6.dp),
         )
-        if (house.hasNote) {
+        if (!house.comment.isNullOrBlank()) {
             // Неактивный индикатор заметки; вся информация — в меню долгого нажатия → «Информация»
             Icon(
                 Icons.Default.Info,
