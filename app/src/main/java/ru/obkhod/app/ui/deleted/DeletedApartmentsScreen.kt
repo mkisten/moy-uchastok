@@ -15,45 +15,20 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import ru.obkhod.app.data.db.AreaType
+import ru.obkhod.app.data.db.Status
 import ru.obkhod.app.ui.AppContainer
 import ru.obkhod.app.ui.viewModelFactory
 import ru.obkhod.app.ui.apartment.formatDateTime
 import ru.obkhod.app.ui.apartment.statusLabel
 
-data class DeletedRow(
-    val id: Long,
-    val number: Int,
-    val label: String,
-    val statusLabel: String,
-    val deletedAt: Long?,
-    val canRestore: Boolean,
-)
-
 class DeletedViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = AppContainer.entranceRepository
 
-    val rows: StateFlow<List<DeletedRow>> = combine(
-        repo.observeDeletedApartments(),
-        repo.observeAllFloors(),
-        repo.observeAllActiveApartments(),
-    ) { deleted, floors, active ->
-        deleted.map { apt ->
-            DeletedRow(
-                id = apt.id,
-                number = apt.apartmentNumber,
-                label = apt.label ?: apt.apartmentNumber.toString(),
-                statusLabel = statusLabel(ru.obkhod.app.data.db.Status.valueOf(apt.status)),
-                deletedAt = apt.deletedAt,
-                canRestore = floors.any { it.id == apt.floorId } &&
-                    active.none { it.entranceId == apt.entranceId && it.apartmentNumber == apt.apartmentNumber },
-            )
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val rows = repo.observeDeletedApartments()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun restore(id: Long, onResult: (Boolean) -> Unit) =
         viewModelScope.launch { onResult(repo.restoreApartment(id)) }
@@ -65,12 +40,14 @@ class DeletedViewModel(app: Application) : AndroidViewModel(app) {
 fun DeletedApartmentsScreen(onBack: () -> Unit) {
     val vm: DeletedViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = viewModelFactory { DeletedViewModel(AppContainer.context() as android.app.Application) })
     val rows by vm.rows.collectAsState()
-    var message by remember { mutableStateOf<String?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Удалённые квартиры") },
+                title = { Text("Удалённые") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
                 },
@@ -79,25 +56,43 @@ fun DeletedApartmentsScreen(onBack: () -> Unit) {
     ) { padding ->
         if (rows.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Удалённых квартир нет")
+                Text("Удалённых квартир и домов нет")
             }
         } else {
             LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(rows, key = { it.id }) { row ->
+                    val isPrivate = row.areaType == AreaType.PRIVATE.name
+                    val title = "${if (isPrivate) "Дом" else "Квартира"} № ${row.label}"
+                    val blockedReason = when {
+                        row.floorNumber == null -> "Исходный этаж удалён"
+                        row.numberTaken -> "Номер уже занят"
+                        else -> null
+                    }
                     ElevatedCard(Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("Квартира № ${row.label}", style = MaterialTheme.typography.titleMedium)
+                                Text(title, style = MaterialTheme.typography.titleMedium)
+                                Text(row.areaName, style = MaterialTheme.typography.bodyMedium)
+                                if (!isPrivate) {
+                                    val floor = row.floorNumber?.let { " · Этаж $it" }.orEmpty()
+                                    Text("Подъезд № ${row.entranceNumber}$floor", style = MaterialTheme.typography.bodySmall)
+                                }
                                 Text(
-                                    "${row.statusLabel} · Удалено: ${formatDateTime(row.deletedAt)}" +
-                                        if (!row.canRestore) " · Нельзя восстановить (этаж удалён или номер занят)" else "",
+                                    "${statusLabel(Status.valueOf(row.status))} · Удалено: ${formatDateTime(row.deletedAt)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                blockedReason?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                }
                             }
-                            if (row.canRestore) {
+                            if (blockedReason == null) {
                                 TextButton(onClick = {
-                                    vm.restore(row.id) { ok -> message = if (ok) "Квартира № ${row.label} восстановлена" else "Не удалось восстановить" }
+                                    vm.restore(row.id) { ok ->
+                                        scope.launch {
+                                            snackbar.showSnackbar(if (ok) "Восстановлено: $title" else "Не удалось восстановить: $title")
+                                        }
+                                    }
                                 }) {
                                     Icon(Icons.Default.Restore, contentDescription = null)
                                     Spacer(Modifier.width(4.dp)); Text("Восстановить")
@@ -107,11 +102,6 @@ fun DeletedApartmentsScreen(onBack: () -> Unit) {
                     }
                 }
             }
-        }
-        message?.let {
-            Snackbar(
-                action = { TextButton(onClick = { message = null }) { Text("OK") } },
-            ) { Text(it) }
         }
     }
 }

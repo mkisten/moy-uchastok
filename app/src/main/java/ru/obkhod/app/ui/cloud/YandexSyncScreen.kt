@@ -29,6 +29,8 @@ import ru.obkhod.app.data.remote.WebDavClient
 import ru.obkhod.app.data.remote.YandexAuth
 import ru.obkhod.app.sync.YandexSync
 import ru.obkhod.app.ui.AppContainer
+import ru.obkhod.app.ui.backup.RestoreDialogs
+import ru.obkhod.app.ui.backup.RestoreViewModel
 import ru.obkhod.app.ui.viewModelFactory
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -58,17 +60,16 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
         refresh()
         // Реагируем на завершение OAuth-входа; после успешного входа сразу синхронизируем
         viewModelScope.launch {
-            YandexAuth.login.collect { _ ->
+            var previousLogin = YandexAuth.login.value
+            YandexAuth.login.collect { login ->
                 val signedIn = YandexAuth.isSignedIn()
-                _state.value = _state.value.copy(
-                    connected = signedIn,
-                    login = YandexAuth.login.value ?: "",
-                )
+                refresh()
                 YandexAuth.message.value?.let { msg ->
                     _state.value = _state.value.copy(message = msg)
                     YandexAuth.clearMessage()
                 }
-                if (signedIn) syncNow()
+                if (signedIn && login != previousLogin) syncNow()
+                previousLogin = login
             }
         }
     }
@@ -170,18 +171,7 @@ class YandexSyncViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun restoreFromCloud() {
-        _state.value = _state.value.copy(busy = true, message = null)
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                YandexSync(getApplication(), db, client()).restoreFromCloud()
-                withMain { _state.value = _state.value.copy(busy = false, message = "Данные восстановлены из облака") }
-                refresh()
-            } catch (e: Exception) {
-                withMain { _state.value = _state.value.copy(busy = false, message = "Ошибка: ${e.message}") }
-            }
-        }
-    }
+    suspend fun prepareRestore() = YandexSync(getApplication(), db, client()).prepareRestore()
 
     fun disconnect() {
         YandexAuth.signOut()
@@ -208,6 +198,9 @@ fun YandexSyncScreen(onBack: () -> Unit) {
         YandexSyncViewModel(AppContainer.context() as Application)
     })
     val state by vm.state.collectAsState()
+    val restoreVm: RestoreViewModel = viewModel(factory = viewModelFactory {
+        RestoreViewModel(AppContainer.context() as Application)
+    })
     val ctx = LocalContext.current
 
     Scaffold(
@@ -262,7 +255,7 @@ fun YandexSyncScreen(onBack: () -> Unit) {
                 }, modifier = Modifier.fillMaxWidth()) {
                     Text("Открыть папку на Яндекс Диске (поделиться)")
                 }
-                OutlinedButton(onClick = { vm.restoreFromCloud() }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { restoreVm.prepare(vm::prepareRestore) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                     Text("Восстановить данные из облака")
                 }
                 OutlinedButton(
@@ -326,4 +319,5 @@ fun YandexSyncScreen(onBack: () -> Unit) {
             }
         }
     }
+    RestoreDialogs(restoreVm)
 }

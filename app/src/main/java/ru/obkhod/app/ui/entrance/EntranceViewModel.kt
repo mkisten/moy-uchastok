@@ -3,6 +3,7 @@ package ru.obkhod.app.ui.entrance
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -15,6 +16,7 @@ import ru.obkhod.app.data.db.Status
 import ru.obkhod.app.data.repo.ApartmentUi
 import ru.obkhod.app.data.repo.FloorWithApartments
 import ru.obkhod.app.data.repo.Statistics
+import ru.obkhod.app.data.repo.VisitUndo
 import ru.obkhod.app.ui.AppContainer
 import ru.obkhod.app.ui.apartment.ApartmentInfo
 
@@ -70,13 +72,25 @@ class EntranceViewModel(app: Application, private val entranceId: Long) : Androi
         )
     }
 
-    fun setStatus(id: Long, status: Status, correction: Boolean) =
-        viewModelScope.launch { repo.setStatus(id, status, correction) }
+    fun setStatus(id: Long, status: Status, onResult: (VisitUndo?) -> Unit) =
+        viewModelScope.launch { onResult(repo.setStatus(id, status)) }
+
+    fun undoVisit(undo: VisitUndo, onResult: (Boolean) -> Unit) =
+        viewModelScope.launch { onResult(repo.undoVisit(undo)) }
 
     fun resetStatus(id: Long) = viewModelScope.launch { repo.resetStatus(id) }
 
-    fun saveNote(id: Long, phone: String?, comment: String?) =
-        viewModelScope.launch { repo.saveNote(id, phone, comment) }
+    fun saveNote(id: Long, phone: String?, comment: String?, onResult: (Boolean) -> Unit = {}) =
+        viewModelScope.launch {
+            val saved = try {
+                repo.saveNote(id, phone, comment)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            onResult(saved)
+        }
 
     fun move(id: Long, floorId: Long, onResult: (String?) -> Unit) = viewModelScope.launch {
         when (repo.moveApartment(id, floorId)) {

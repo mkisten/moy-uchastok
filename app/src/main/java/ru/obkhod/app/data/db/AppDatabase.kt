@@ -8,9 +8,9 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [
         AreaEntity::class, EntranceEntity::class, FloorEntity::class,
-        ApartmentEntity::class, VisitHistoryEntity::class,
+        ApartmentEntity::class, VisitHistoryEntity::class, TeamSyncCheckpoint::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -19,6 +19,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun floorDao(): FloorDao
     abstract fun apartmentDao(): ApartmentDao
     abstract fun visitHistoryDao(): VisitHistoryDao
+    abstract fun teamSyncDao(): TeamSyncDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null
@@ -71,11 +72,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE team_sync (
+                        id INTEGER NOT NULL PRIMARY KEY, connectionId TEXT NOT NULL,
+                        cursor INTEGER NOT NULL, baseline TEXT NOT NULL,
+                        pending TEXT, captured TEXT
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext, AppDatabase::class.java, "obkhod.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .build().also { instance = it }
             }
     }
 }

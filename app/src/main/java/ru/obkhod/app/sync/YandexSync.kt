@@ -13,6 +13,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URL
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Синхронизация через общую папку Яндекс Диска (WebDAV).
@@ -34,7 +35,8 @@ class YandexSync(
 
     data class Result(val pulled: Int, val pushed: Int)
 
-    suspend fun sync(): Result {
+    suspend fun sync(): Result = BackupManager.cloudSyncAndRestore.withLock {
+        check(!TeamConnectionStore.exists(context)) { "Для Яндекс Диска сначала отключите синхронизацию команды" }
         val manager = BackupManager(context, db)
 
         // 1. Папка и удалённый снапшот
@@ -188,15 +190,18 @@ class YandexSync(
         val snapshot = manager.buildSnapshot()
         webdav.put(DATA_FILE, snapshot.toString(0))
 
-        return Result(pulled, pushed)
+        Result(pulled, pushed)
     }
 
-    /** Полная замена локальных данных облачным снапшотом (ручное восстановление). */
-    suspend fun restoreFromCloud() {
-        val json = webdav.get(DATA_FILE)?.let {
-            try { JSONObject(it) } catch (e: Exception) { null }
-        } ?: throw IllegalStateException("В облаке нет файла данных")
-        BackupManager(context, db).restoreFromJson(json)
+    /** Загружает и проверяет копию для предпросмотра, не меняя локальную базу. */
+    suspend fun prepareRestore(): BackupManager.PreparedBackup = BackupManager.cloudSyncAndRestore.withLock {
+        val contents = webdav.get(DATA_FILE) ?: throw IllegalStateException("В облаке нет файла данных")
+        val json = try {
+            JSONObject(contents)
+        } catch (e: org.json.JSONException) {
+            throw java.io.IOException("Не удалось прочитать копию на Яндекс Диске", e)
+        }
+        BackupManager(context, db).prepareJson(json)
     }
 
     private fun optStringOrNull(o: JSONObject, key: String): String? =

@@ -2,6 +2,8 @@ package ru.obkhod.app.backup
 
 import android.content.Context
 import android.net.Uri
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.obkhod.app.data.db.AppDatabase
@@ -11,6 +13,17 @@ import ru.obkhod.app.data.db.EntranceEntity
 import ru.obkhod.app.data.db.FloorEntity
 import ru.obkhod.app.data.db.VisitHistoryEntity
 import ru.obkhod.app.data.repo.withTransactionCompat
+import ru.obkhod.app.data.repo.newUuid
+import ru.obkhod.app.data.db.AreaType
+import ru.obkhod.app.data.db.Status
+import ru.obkhod.app.data.db.EventType
+import ru.obkhod.app.BuildConfig
+import ru.obkhod.app.sync.TeamConnectionStore
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,18 +41,36 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
     companion object {
         const val BACKUP_FORMAT_VERSION = 1
         const val ENTRY_NAME = "backup.json"
+        internal val cloudSyncAndRestore = Mutex()
     }
 
-    sealed class RestoreResult {
-        data object Success : RestoreResult()
-        data class Error(val message: String) : RestoreResult()
+    class PreparedBackup internal constructor(
+        val createdAt: Long?,
+        internal val areas: List<AreaEntity>,
+        internal val entrances: List<EntranceEntity>,
+        internal val floors: List<FloorEntity>,
+        internal val apartments: List<ApartmentEntity>,
+        internal val history: List<VisitHistoryEntity>,
+    ) {
+        val areaCount get() = areas.size
+        val entranceCount get() = entrances.size
+        val activeCount get() = apartments.count { it.deletedAt == null }
+        val deletedCount get() = apartments.size - activeCount
+        val historyCount get() = history.size
     }
+
+    private val safetyCopy get() = File(context.filesDir, "before_restore.zip")
+
+    fun hasSafetyCopy(): Boolean = safetyCopy.isFile
 
     /** Создание резервной копии: все данные приложения → backup.json → ZIP (п. 18). */
     suspend fun createBackup(out: java.io.OutputStream) {
+        writeZip(out, buildSnapshot())
+    }
+
+    private fun writeZip(out: java.io.OutputStream, json: JSONObject) {
         ZipOutputStream(out.buffered()).use { zip ->
             zip.putNextEntry(ZipEntry(ENTRY_NAME))
-            val json = buildJson()
             zip.write(json.toString(2).toByteArray(Charsets.UTF_8))
             zip.closeEntry()
             zip.finish()
@@ -63,7 +94,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         val root = JSONObject()
         root.put("formatVersion", BACKUP_FORMAT_VERSION)
         root.put("createdAt", System.currentTimeMillis())
-        root.put("appVersion", "1.0.0")
+        root.put("appVersion", BuildConfig.VERSION_NAME)
 
         root.put("areas", JSONArray().apply {
             areas.forEach { a ->
@@ -79,6 +110,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                 put(JSONObject().apply {
                     put("id", e.id); put("uuid", e.uuid); put("areaId", e.areaId)
                     put("entranceNumber", e.entranceNumber); put("createdAt", e.createdAt)
+                    put("updatedAt", e.updatedAt)
                 })
             }
         })
@@ -87,7 +119,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                 put(JSONObject().apply {
                     put("id", f.id); put("uuid", f.uuid); put("entranceId", f.entranceId)
                     put("floorNumber", f.floorNumber); put("apartmentCount", f.apartmentCount)
-                    put("sortOrder", f.sortOrder)
+                    put("sortOrder", f.sortOrder); put("updatedAt", f.updatedAt)
                 })
             }
         })
@@ -119,44 +151,40 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         return root
     }
 
-    /**
-     * Восстановление из ZIP (п. 18).
-     * Валидация → временная копия текущей базы → замена всех данных одной транзакцией.
-     * При любой ошибке существующие данные не изменяются.
-     */
-    suspend fun restoreFrom(uri: Uri): RestoreResult {
-        val json: JSONObject = try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                ZipInputStream(input.buffered()).use { zip ->
-                    var entry: ZipEntry? = zip.nextEntry
-                    var found: ByteArray? = null
-                    while (entry != null) {
-                        if (entry.name == ENTRY_NAME) {
-                            found = zip.readBytes()
-                            break
-                        }
-                        entry = zip.nextEntry
+    fun prepareZip(uri: Uri): PreparedBackup {
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IOException("Не удалось открыть файл резервной копии")
+        return prepareJson(readZip(input))
+    }
+
+    fun prepareSafetyCopy(): PreparedBackup = prepareJson(readZip(safetyCopy.inputStream()))
+
+    private fun readZip(input: InputStream): JSONObject {
+        try {
+            ZipInputStream(input.buffered()).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.name == ENTRY_NAME) {
+                        return JSONObject(zip.readBytes().toString(Charsets.UTF_8))
                     }
-                    found?.let { String(it, Charsets.UTF_8) }
-                        ?.let { JSONObject(it) }
                 }
-            } ?: return RestoreResult.Error("Не удалось прочитать файл резервной копии")
+            }
         } catch (e: Exception) {
-            return RestoreResult.Error("Файл повреждён или не является резервной копией")
+            throw IOException("Не удалось прочитать резервную копию ZIP", e)
         }
-        return restoreFromJson(json)
+        throw IOException("В ZIP нет файла резервной копии")
     }
 
     /** Снапшот всей базы в формате бэкапа (для облачной синхронизации). */
-    suspend fun buildSnapshot(): JSONObject = buildJson()
+    suspend fun buildSnapshot(): JSONObject = db.withTransactionCompat { buildJson() }
 
-    /** Восстановление из JSON-снапшота (тот же формат, что и ZIP-бэкап). */
-    suspend fun restoreFromJson(json: JSONObject): RestoreResult {
+    /** Проверяет и фиксирует содержимое копии, которую пользователь увидит перед заменой. */
+    fun prepareJson(json: JSONObject): PreparedBackup {
 
         // Проверка версии формата (п. 18)
         val version = json.optInt("formatVersion", -1)
         if (version != BACKUP_FORMAT_VERSION) {
-            return RestoreResult.Error("Неподдерживаемая версия резервной копии: $version")
+            throw IOException("Неподдерживаемая версия резервной копии: $version")
         }
         val areas = json.optJSONArray("areas")
         val entrances = json.optJSONArray("entrances")
@@ -164,7 +192,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         val apartments = json.optJSONArray("apartments")
         val history = json.optJSONArray("history")
         if (areas == null || entrances == null || floors == null || apartments == null || history == null) {
-            return RestoreResult.Error("Резервная копия неполна")
+            throw IOException("Резервная копия неполна")
         }
 
         // Разбор с проверкой целостности ссылок до изменения базы
@@ -181,6 +209,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                         id = o.getLong("id"), name = o.getString("name"),
                         type = o.optString("type", ru.obkhod.app.data.db.AreaType.MULTI.name),
                         createdAt = o.getLong("createdAt"), updatedAt = o.getLong("updatedAt"),
+                        uuid = o.backupUuid(),
                     )
                 )
             }
@@ -190,6 +219,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                     EntranceEntity(
                         id = o.getLong("id"), areaId = o.getLong("areaId"),
                         entranceNumber = o.getInt("entranceNumber"), createdAt = o.getLong("createdAt"),
+                        uuid = o.backupUuid(), updatedAt = o.optLong("updatedAt", o.getLong("createdAt")),
                     )
                 )
             }
@@ -200,6 +230,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                         id = o.getLong("id"), entranceId = o.getLong("entranceId"),
                         floorNumber = o.getInt("floorNumber"), apartmentCount = o.getInt("apartmentCount"),
                         sortOrder = o.optInt("sortOrder", 0),
+                        uuid = o.backupUuid(), updatedAt = o.optLong("updatedAt", 0),
                     )
                 )
             }
@@ -215,6 +246,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                         createdAt = o.getLong("createdAt"), updatedAt = o.getLong("updatedAt"),
                         deletedAt = o.optLongOrNull("deletedAt"),
                         hasChild = o.optBoolean("hasChild", false),
+                        uuid = o.backupUuid(),
                     )
                 )
             }
@@ -228,42 +260,95 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                         newStatus = o.optStringOrNull("newStatus"),
                         comment = o.optStringOrNull("comment"),
                         eventType = o.getString("eventType"),
+                        uuid = o.backupUuid(),
                     )
                 )
             }
         } catch (e: Exception) {
-            return RestoreResult.Error("Ошибка чтения данных резервной копии: ${e.message}")
+            throw IOException("В копии есть записи с отсутствующими или неверными полями", e)
         }
 
         // Проверка целостности внешних ключей
         val entranceIds = parsedEntrances.map { it.id }.toSet()
-        val floorIds = parsedFloors.map { it.id }.toSet()
+        val floorEntrances = parsedFloors.associate { it.id to it.entranceId }
         val apartmentIds = parsedApartments.map { it.id }.toSet()
         val areaIds = parsedAreas.map { it.id }.toSet()
-        if (parsedEntrances.any { it.areaId !in areaIds }) return RestoreResult.Error("Нарушена целостность: подъезд без участка")
-        if (parsedFloors.any { it.entranceId !in entranceIds }) return RestoreResult.Error("Нарушена целостность: этаж без подъезда")
-        if (parsedApartments.any { it.entranceId !in entranceIds || it.floorId !in floorIds }) {
-            return RestoreResult.Error("Нарушена целостность: квартира с некорректными ссылками")
+        validateIds(parsedAreas, AreaEntity::id, AreaEntity::uuid)
+        validateIds(parsedEntrances, EntranceEntity::id, EntranceEntity::uuid)
+        validateIds(parsedFloors, FloorEntity::id, FloorEntity::uuid)
+        validateIds(parsedApartments, ApartmentEntity::id, ApartmentEntity::uuid)
+        validateIds(parsedHistory, VisitHistoryEntity::id, VisitHistoryEntity::uuid)
+        if (parsedEntrances.any { it.areaId !in areaIds }) throw IOException("Нарушена целостность: подъезд без участка")
+        if (parsedFloors.any { it.entranceId !in entranceIds }) throw IOException("Нарушена целостность: этаж без подъезда")
+        if (parsedApartments.any { apartment ->
+                val floorEntranceId = floorEntrances[apartment.floorId]
+                apartment.entranceId !in entranceIds ||
+                    (floorEntranceId == null && apartment.deletedAt == null) ||
+                    (floorEntranceId != null && floorEntranceId != apartment.entranceId)
+            }
+        ) {
+            throw IOException("Нарушена целостность: квартира с некорректными ссылками")
         }
         if (parsedHistory.any { it.apartmentId !in apartmentIds }) {
-            return RestoreResult.Error("Нарушена целостность: запись истории без квартиры")
+            throw IOException("Нарушена целостность: запись истории без квартиры")
         }
+        val statuses = Status.entries.map { it.name }.toSet()
+        val types = AreaType.entries.map { it.name }.toSet()
+        val events = EventType.entries.map { it.name }.toSet()
+        if (parsedAreas.any { it.type !in types } ||
+            parsedApartments.any { it.status !in statuses } ||
+            parsedHistory.any {
+                it.eventType !in events ||
+                    (it.previousStatus != null && it.previousStatus !in statuses) ||
+                    (it.newStatus != null && it.newStatus !in statuses)
+            }
+        ) {
+            throw IOException("Копия содержит неизвестные типы участков, статусы или события")
+        }
+        return PreparedBackup(json.optLongOrNull("createdAt"), parsedAreas, parsedEntrances, parsedFloors, parsedApartments, parsedHistory)
+    }
 
-        // Замена всех данных в одной транзакции (п. 18)
+    /** Сохраняет текущую базу и заменяет её только после успешной записи ZIP. */
+    suspend fun restore(backup: PreparedBackup) = cloudSyncAndRestore.withLock {
+        check(!TeamConnectionStore.exists(context)) { "Перед восстановлением отключите синхронизацию команды" }
         db.withTransactionCompat {
-            db.visitHistoryDao().deleteEverything()
-            db.apartmentDao().deleteEverything()
-            db.floorDao().deleteEverything()
-            db.entranceDao().deleteEverything()
-            db.areaDao().deleteEverything()
-
-            db.areaDao().insertAll(parsedAreas)
-            db.entranceDao().insertAll(parsedEntrances)
-            db.floorDao().insertAll(parsedFloors)
-            db.apartmentDao().insertAll(parsedApartments)
-            db.visitHistoryDao().insertAll(parsedHistory)
+            saveSafetyCopy(buildJson())
+            replaceData(backup)
         }
-        return RestoreResult.Success
+    }
+
+    /** Вызывается внутри транзакции вместе с обновлением контрольной точки. */
+    internal suspend fun replaceData(backup: PreparedBackup) {
+        db.visitHistoryDao().deleteEverything()
+        db.apartmentDao().deleteEverything()
+        db.floorDao().deleteEverything()
+        db.entranceDao().deleteEverything()
+        db.areaDao().deleteEverything()
+        db.areaDao().insertAll(backup.areas)
+        db.entranceDao().insertAll(backup.entrances)
+        db.floorDao().insertAll(backup.floors)
+        db.apartmentDao().insertAll(backup.apartments)
+        db.visitHistoryDao().insertAll(backup.history)
+    }
+
+    private fun saveSafetyCopy(json: JSONObject) {
+        val pending = File(context.filesDir, "before_restore.pending")
+        try {
+            writeZip(pending.outputStream(), json)
+            FileOutputStream(pending, true).use { it.fd.sync() }
+            Files.move(pending.toPath(), safetyCopy.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (e: Exception) {
+            throw IOException("Не удалось сохранить страховочную копию", e)
+        } finally {
+            pending.delete()
+        }
+    }
+
+    private fun <T> validateIds(rows: List<T>, id: (T) -> Long, uuid: (T) -> String) {
+        val ids = rows.map(id)
+        if (ids.any { it <= 0 } || ids.toSet().size != rows.size || rows.map(uuid).toSet().size != rows.size) {
+            throw IOException("В копии есть повторяющиеся или неверные идентификаторы")
+        }
     }
 
     /** Автоматический префикс имени файла с датой (п. 18). */
@@ -272,6 +357,8 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         return "obkhod_backup_$date.zip"
     }
 }
+
+private fun JSONObject.backupUuid(): String = optStringOrNull("uuid").orEmpty().ifBlank { newUuid() }
 
 private fun JSONObject.optStringOrNull(key: String): String? =
     if (isNull(key) || !has(key)) null else getString(key)

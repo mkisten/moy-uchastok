@@ -23,7 +23,6 @@ Android-приложение «Мой участок» — автономный 
 | Compose | BOM 2024.12.01 (фактически foundation 1.11.2) |
 | Room | 2.6.1 (KSP-компилятор) |
 | OkHttp | 4.12.0 (WebDAV-клиент) |
-| AppAuth | 0.11.1 (Google OAuth) |
 | Apache POI | 5.2.5 (+ xmlbeans 5.2.0, exclude xmlbeans из poi-ooxml) |
 | Навигация | navigation-compose 2.8.5 |
 
@@ -58,18 +57,17 @@ JAVA_HOME="C:/Users/mkisten/.gradle/jdks/eclipse_adoptium-17-amd64-windows.2" ./
 app/src/main/java/ru/obkhod/app/
 ├── MainActivity.kt          # Activity; SharedPreferences "nav_state" — возврат к последнему экрану (п.21 ТЗ)
 ├── data/
-│   ├── db/                  # Room v6: entities.kt, daos.kt, AppDatabase.kt (миграции 1→6)
-│   ├── remote/              # WebDavClient (OkHttp), YandexAuth (OAuth), GoogleAuth (AppAuth),
-│   │                        # GoogleRest, TeamApi (Google Sheets), UpdateChecker
+│   ├── db/                  # Room v7: сущности, DAO и контрольная точка team_sync
+│   ├── remote/              # WebDavClient (OkHttp), YandexAuth (OAuth)
 │   └── repo/                # AreaRepository, EntranceRepository, Models.kt, withTransactionCompat
 ├── export/                  # ExcelExporter, CsvExporter, ExportDataLoader
-├── backup/                  # BackupManager (ZIP+JSON, buildSnapshot/restoreFromJson)
-├── sync/                    # SheetSync (Google Sheets), YandexSync (WebDAV JSON-снапшот)
+├── backup/                  # BackupManager (ZIP+JSON, проверка и восстановление)
+├── sync/                    # TeamSync (журнал операций Apps Script), YandexSync (WebDAV)
 ├── update/                  # UpdateChecker (GitHub Releases) + UpdateInstaller (DownloadManager)
 └── ui/
     ├── AppContainer.kt, AppNavHost.kt, ViewModelFactory.kt
     ├── theme/, areas/, create/, area/, entrance/, apartment/, deleted/, edit/, settings/,
-    ├── cloud/               # CloudSyncScreen (Google), YandexSyncScreen (Яндекс)
+    ├── cloud/               # TeamSyncScreen (Apps Script), YandexSyncScreen (Яндекс)
     └── theme/ThemePrefs.kt  # тема в DataStore
 ```
 
@@ -78,11 +76,11 @@ app/src/main/java/ru/obkhod/app/
 `settings?areaId={areaId}` · `addEntrance/{areaId}` · `editEntrance/{entranceId}` ·
 `cloud` · `yandex` (аргументы — NavType.LongType).
 
-### БД (Room, version 6)
+### БД (Room, version 7)
 `areas` → `entrances` (CASCADE) → `floors` (CASCADE) → `apartments` + `visit_history`.
 Миграции: v2 `label` (текстовые номера «1А»), v3 `type` участка (MULTI|PRIVATE),
 v4 `uuid` всем строкам + `updatedAt` подъездам/этажам, v5 `hasChild`, v6 hasChild=1 →
-status='CHILD'. Квартиры: `status`, `phone`, `comment`, `lastVisitAt`, `deletedAt`
+status='CHILD', v7 `team_sync` для курсора и ожидающего отправки пакета. Квартиры: `status`, `phone`, `comment`, `lastVisitAt`, `deletedAt`
 (soft delete), `label`, `hasChild` (legacy, не используется UI — заменён статусом CHILD).
 Индексы на все FK, status, apartmentNumber, deletedAt.
 
@@ -128,29 +126,44 @@ full-width), «Ребенок один дома» (голубой, full-width). 
   на схему домов; старт всегда со списка участков (иначе «Назад» закрывал приложение).
   Терминология для PRIVATE — «дом»; «Информация» содержит редактируемые телефон/комментарий.
 - **Трубка/«i»**: трубка — только числовые телефоны; «i» — только заполненный комментарий.
-- **Информация (окно)**: редактируемые телефон и комментарий + «Сохранить», звонилка при
-  заполненном поле, инлайн-история; кнопок «Заметка»/«Закрыть»/«История» нет.
+- **Информация (окно)**: поле телефона принимает номер или текстовую пометку («Нет
+  телефона»). Звонилка доступна для распознанного номера. «Сохранить» закрывает
+  окно после успешной записи телефона и комментария. При ошибке введённый текст
+  остаётся в окне. История отображается в этом же окне.
 - **Синхронизация Яндекс Диск** (основной, WebDAV/OkHttp): вход через Яндекс ID (OAuth,
   подтверждение по телефону, код вставляется в приложение) или пароль приложения; общая
   папка «Мой участок» (шаринг Яндекс Диска по email); слияние по uuid (история — union,
   поля — «последний выигрывает»); автосинхронизация при запуске.
-- **Синхронизация Google Таблица**: код-флоу AppAuth (Client ID в local.properties:
-  googleClientId…), SheetSync по uuid LWW, колонка M «hasChild».
+- **Синхронизация команды**: Google Apps Script + закрытая Google Таблица с журналом,
+  одноразовые приглашения, отдельный ключ устройства в `noBackupFilesDir`, обмен UUID
+  и изменёнными полями. Предыдущий режим Google OAuth/AppAuth удалён. Развёртывание
+  описано в README. При подключении команды Яндекс Диск и замена локальной базы недоступны.
 - **Обновления**: UpdateChecker (GitHub Releases, SemVer) + UpdateInstaller (DownloadManager
   + автозапуск установщика + MANAGE_UNKNOWN_APP_SOURCES). Ассеты именуются с версией.
 - **Яндекс OAuth «Приложение не установлено»**: из-за платформы Android в oauth.yandex.ru;
   НЕ добавлять её, оставить только Web-сервисы + verification_code redirect.
   401 после входа = не добавлен доступ «Яндекс Диск → Запись во всех папках и на диске»
   (или токен без новых прав — перевыпустить входом).
-- **Google OAuth**: AppAuth, iOS-тип client (без секрета), Bundle ID ru.obkhod.app;
-  Client ID в local.properties: googleClientId. Пока пуст — экран показывает подсказку.
 - Release APK подписан debug-ключом специально (для установки); для Google Play — свой ключ.
 
-## Текущий статус (2026-11-19)
+## Текущий статус (2026-11-20)
 
-- Версия 1.5.0 / versionCode 28 (проверено aapt). Все сборки и тесты зелёные.
-- Релизы на GitHub: v1.3.9 (стабильная без Yandex-изменений) и v1.3.1…v1.3.9 удалены/
-  переименованы; актуальный ассет MoyUchastok-v1.5.0.apk. Устаревшие ассеты удалены.
+- Командная синхронизация через Apps Script проверена в BlueStacks на двух изолированных
+  базах Room и локальном стенде, который исполняет `server/team-sync/Code.gs`. Проверены
+  миграция 6→7, повтор пакета, отмена визита, конкурентная правка и восстановление квартиры.
+  Развёртывание в реальной Google Таблице ещё требуется.
+- После записи визита можно отменить последнюю отметку из уведомления. Отмена убирает
+  эту запись из истории и возвращает прежний статус и дату обхода одной транзакцией.
+- Корзина показывает адрес, подъезд и этаж. Восстановление проверяет отображаемый номер
+  на исходном этаже, поэтому номера 25 и 25А считаются разными.
+
+- Версия 1.5.2 / versionCode 30 содержит запись повторных визитов с тем же
+  статусом, поиск по номеру дома или квартиры и видимый активный фильтр.
+  ZIP и Яндекс Диск используют общий предпросмотр восстановления. После подтверждения
+  приложение сохраняет предыдущую базу в `files/before_restore.zip`, затем заменяет данные
+  в транзакции. Страховочная копия доступна из настроек.
+- APK v1.5.2 для обновления: `MoyUchastok-v1.5.2.apk`. Ссылка на версию:
+  https://github.com/mkisten/moy-uchastok/releases/tag/v1.5.2.
 - Телефон (FEPV9XTC4DSOTOHU, MIUI): блокирует adb input — UI-тесты руками пользователя;
   BlueStacks (127.0.0.1:5555) — для автоматизации.
 - ⚠ Ручная проверка: обновление по цепочке релизов на телефоне; XLSX в Excel/LibreOffice;

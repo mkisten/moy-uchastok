@@ -8,6 +8,37 @@ import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
+data class DeletedApartmentDetails(
+    val id: Long,
+    val label: String,
+    val status: String,
+    val deletedAt: Long,
+    val areaName: String,
+    val areaType: String,
+    val entranceNumber: Int,
+    val floorNumber: Int?,
+    val numberTaken: Boolean,
+)
+
+// Сравниваем отображаемые номера на исходном этаже, как при редактировании квартиры.
+private const val DELETED_DETAILS = """
+    SELECT d.id, COALESCE(d.label, CAST(d.apartmentNumber AS TEXT)) AS label,
+           d.status, d.deletedAt, a.name AS areaName, a.type AS areaType,
+           e.entranceNumber, f.floorNumber,
+           EXISTS (
+               SELECT 1 FROM apartments AS active
+               WHERE active.floorId = d.floorId AND active.entranceId = d.entranceId
+                 AND active.deletedAt IS NULL
+                 AND COALESCE(active.label, CAST(active.apartmentNumber AS TEXT))
+                     = COALESCE(d.label, CAST(d.apartmentNumber AS TEXT))
+           ) AS numberTaken
+    FROM apartments AS d
+    JOIN entrances AS e ON e.id = d.entranceId
+    JOIN areas AS a ON a.id = e.areaId
+    LEFT JOIN floors AS f ON f.id = d.floorId AND f.entranceId = d.entranceId
+    WHERE d.deletedAt IS NOT NULL
+"""
+
 @Dao
 interface AreaDao {
     @Query("SELECT * FROM areas ORDER BY createdAt DESC")
@@ -139,8 +170,11 @@ interface ApartmentDao {
     @Query("SELECT * FROM apartments")
     suspend fun getAll(): List<ApartmentEntity>
 
-    @Query("SELECT * FROM apartments WHERE deletedAt IS NOT NULL ORDER BY deletedAt DESC")
-    fun observeDeleted(): Flow<List<ApartmentEntity>>
+    @Query(DELETED_DETAILS + " ORDER BY d.deletedAt DESC, d.id DESC")
+    fun observeDeletedDetails(): Flow<List<DeletedApartmentDetails>>
+
+    @Query(DELETED_DETAILS + " AND d.id = :id")
+    suspend fun getDeletedDetails(id: Long): DeletedApartmentDetails?
 
     @Query("SELECT * FROM apartments WHERE deletedAt IS NOT NULL")
     suspend fun getDeleted(): List<ApartmentEntity>
@@ -154,9 +188,6 @@ interface ApartmentDao {
     @Query("SELECT COUNT(*) FROM apartments WHERE entranceId = :entranceId AND apartmentNumber = :number AND deletedAt IS NULL")
     suspend fun countActiveByNumber(entranceId: Long, number: Int): Int
 
-    @Query("SELECT * FROM apartments WHERE entranceId = :entranceId AND apartmentNumber = :number AND deletedAt IS NULL LIMIT 1")
-    suspend fun findActiveByNumber(entranceId: Long, number: Int): ApartmentEntity?
-
     @Query("SELECT COUNT(*) FROM apartments WHERE floorId = :floorId AND deletedAt IS NULL")
     suspend fun countActiveOnFloor(floorId: Long): Int
 
@@ -165,6 +196,9 @@ interface ApartmentDao {
 
     @Update
     suspend fun update(apartment: ApartmentEntity)
+
+    @Query("UPDATE apartments SET phone = :phone, comment = :comment, updatedAt = :updatedAt WHERE id = :id AND deletedAt IS NULL")
+    suspend fun updateNote(id: Long, phone: String?, comment: String?, updatedAt: Long): Int
 
     @Query("UPDATE apartments SET deletedAt = :deletedAt, updatedAt = :updatedAt WHERE id = :id")
     suspend fun softDelete(id: Long, deletedAt: Long, updatedAt: Long)
@@ -181,8 +215,14 @@ interface ApartmentDao {
 
 @Dao
 interface VisitHistoryDao {
-    @Query("SELECT * FROM visit_history WHERE apartmentId = :apartmentId ORDER BY visitDate DESC")
+    @Query("SELECT * FROM visit_history WHERE apartmentId = :apartmentId ORDER BY visitDate DESC, id DESC")
     fun observeByApartment(apartmentId: Long): Flow<List<VisitHistoryEntity>>
+
+    @Query("SELECT * FROM visit_history WHERE apartmentId = :apartmentId ORDER BY id DESC LIMIT 1")
+    suspend fun latestRecordedVisit(apartmentId: Long): VisitHistoryEntity?
+
+    @Query("DELETE FROM visit_history WHERE id = :id AND uuid = :uuid")
+    suspend fun deleteVisit(id: Long, uuid: String)
 
     @Query("SELECT * FROM visit_history")
     suspend fun getAll(): List<VisitHistoryEntity>

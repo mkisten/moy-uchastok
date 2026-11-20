@@ -7,10 +7,6 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-// Google OAuth Client ID (тип «iOS/Installed», без секрета). Заполняется в gradle.properties:
-//   googleClientId=1234567890-abc.apps.googleusercontent.com
-val googleClientId = (project.findProperty("googleClientId") as String?) ?: ""
-
 // Яндекс OAuth (вход через Яндекс ID). Ключи хранятся в local.properties (не публикуются):
 //   yandexClientId=...
 //   yandexClientSecret=...
@@ -29,12 +25,10 @@ android {
         applicationId = "ru.obkhod.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 29
-        versionName = "1.5.1"
+        versionCode = 30
+        versionName = "1.5.2"
+        testInstrumentationRunner = "ru.obkhod.app.TeamSyncTestRunner"
         vectorDrawables { useSupportLibrary = true }
-        manifestPlaceholders["googleRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
-        manifestPlaceholders["appAuthRedirectScheme"] = "com.googleusercontent.apps.$googleClientId"
-        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleClientId\"")
         buildConfigField("String", "YANDEX_CLIENT_ID", "\"$yandexClientId\"")
         buildConfigField("String", "YANDEX_CLIENT_SECRET", "\"$yandexClientSecret\"")
     }
@@ -85,7 +79,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
-    implementation("net.openid:appauth:0.11.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     val room = "2.6.1"
@@ -100,8 +93,7 @@ dependencies {
     implementation("org.apache.xmlbeans:xmlbeans:5.2.0")
 
     testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("androidx.collection:collection-jvm:1.4.4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

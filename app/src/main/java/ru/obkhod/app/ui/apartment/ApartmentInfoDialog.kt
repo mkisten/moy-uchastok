@@ -13,9 +13,11 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.obkhod.app.data.db.Status
@@ -26,6 +28,11 @@ import java.util.Locale
 
 private val formatPlain = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
 private val weekdays = arrayOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+private fun dialableNumber(text: String): String? {
+    val normalized = text.filterNot { it.isWhitespace() || it in "()-" }
+    return normalized.takeIf { it.matches(Regex("\\+?[0-9]{5,}")) }
+}
 
 fun formatDateTime(ts: Long?): String {
     ts ?: return "Обход не проводился"
@@ -79,17 +86,24 @@ fun ApartmentInfoDialog(
     history: List<VisitHistoryEntity> = emptyList(),
     isPrivate: Boolean = false,
     onDismiss: () -> Unit,
-    onSaveNote: (String?, String?) -> Unit,
+    onSaveNote: (String?, String?, (Boolean) -> Unit) -> Unit,
 ) {
     val context = LocalContext.current
+    val focus = LocalFocusManager.current
     val noun = if (isPrivate) "Дом" else "Квартира"
-    var phoneText by remember { mutableStateOf(info.phone ?: "") }
-    var commentText by remember { mutableStateOf(info.comment ?: "") }
+    var phoneText by rememberSaveable(info.id) { mutableStateOf(info.phone.orEmpty()) }
+    var commentText by rememberSaveable(info.id) { mutableStateOf(info.comment.orEmpty()) }
+    var saving by remember(info.id) { mutableStateOf(false) }
+    var saveFailed by remember(info.id) { mutableStateOf(false) }
+    val dialNumber = dialableNumber(phoneText)
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!saving) onDismiss() },
         title = { Text("$noun № ${info.label}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (saveFailed) {
+                    Text("Не удалось сохранить данные. Попробуйте ещё раз.", color = MaterialTheme.colorScheme.error)
+                }
                 Text("Подъезд: ${info.entranceNumber} · Этаж: ${info.floorNumber}")
                 Text("Статус: ${statusLabel(info.status)}")
                 if (info.status == Status.CHILD) {
@@ -100,16 +114,18 @@ fun ApartmentInfoDialog(
                     value = phoneText,
                     onValueChange = { phoneText = it },
                     label = { Text("Телефон") },
-                    supportingText = { Text("Можно с +, пробелами и дефисами") },
+                    supportingText = { Text("Например: +375 29 123-45-67 или «Нет телефона»") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    enabled = !saving,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                     trailingIcon = {
-                        if (phoneText.isNotBlank()) {
+                        if (dialNumber != null) {
                             IconButton(
+                                enabled = !saving,
                                 onClick = {
                                     // ACTION_DIAL открывает набор номера без совершения звонка (п. 9)
                                     context.startActivity(
-                                        Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(phoneText)}"))
+                                        Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", dialNumber, null))
                                     )
                                 },
                             ) { Icon(Icons.Default.Call, contentDescription = "Позвонить") }
@@ -121,6 +137,7 @@ fun ApartmentInfoDialog(
                     value = commentText,
                     onValueChange = { commentText = it },
                     label = { Text("Комментарий") },
+                    enabled = !saving,
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -147,9 +164,18 @@ fun ApartmentInfoDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onSaveNote(phoneText.trim().ifBlank { null }, commentText.trim().ifBlank { null })
-            }) { Text("Сохранить") }
+            TextButton(
+                enabled = !saving,
+                onClick = {
+                    focus.clearFocus()
+                    saving = true
+                    saveFailed = false
+                    onSaveNote(phoneText.trim().ifBlank { null }, commentText.trim().ifBlank { null }) { saved ->
+                        saving = false
+                        if (saved) onDismiss() else saveFailed = true
+                    }
+                },
+            ) { Text(if (saving) "Сохраняем…" else "Сохранить") }
         },
     )
 }

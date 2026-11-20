@@ -64,7 +64,7 @@ class EntranceRepository(private val db: AppDatabase) {
     fun observeHistory(apartmentId: Long): Flow<List<VisitHistoryEntity>> =
         historyDao.observeByApartment(apartmentId)
 
-    fun observeDeletedApartments(): Flow<List<ApartmentEntity>> = apartmentDao.observeDeleted()
+    fun observeDeletedApartments() = apartmentDao.observeDeletedDetails()
 
     // Агрегированные потоки по всем участкам — для главного экрана и экспорта
     fun observeAllEntrances(): Flow<List<EntranceEntity>> = entranceDao.observeAll()
@@ -79,12 +79,17 @@ class EntranceRepository(private val db: AppDatabase) {
         historyDao.apartmentIdsWithVisitsFlow().map { ids -> ids.toSet() }
 
     /** Установка статуса: пишет запись истории, обновляет дату обхода (пп. 7, 13, 14). */
-    suspend fun setStatus(apartmentId: Long, newStatus: Status, isCorrection: Boolean = false, visitComment: String? = null) {
-        val now = System.currentTimeMillis()
-        val apt = apartmentDao.getById(apartmentId) ?: return
-        val prev = Status.valueOf(apt.status)
-        if (prev == newStatus && !isCorrection) return
+    suspend fun setStatus(
+        apartmentId: Long,
+        newStatus: Status,
+        isCorrection: Boolean = false,
+        visitComment: String? = null,
+    ): VisitUndo? =
         db.withTransactionCompat {
+            val apt = apartmentDao.getById(apartmentId) ?: return@withTransactionCompat null
+            if (apt.deletedAt != null) return@withTransactionCompat null
+            val prev = Status.valueOf(apt.status)
+            val now = System.currentTimeMillis()
             apartmentDao.update(
                 apt.copy(
                     status = newStatus.name,
@@ -92,27 +97,45 @@ class EntranceRepository(private val db: AppDatabase) {
                     updatedAt = now,
                 )
             )
-            historyDao.insert(
-                VisitHistoryEntity(
-                    uuid = newUuid(),
-                    apartmentId = apartmentId,
-                    visitDate = now,
-                    previousStatus = if (prev == Status.NONE) null else prev.name,
-                    newStatus = newStatus.name,
-                    comment = visitComment,
-                    eventType = if (isCorrection) EventType.CORRECTION.name else EventType.VISIT.name,
-                )
+            val record = VisitHistoryEntity(
+                uuid = newUuid(),
+                apartmentId = apartmentId,
+                visitDate = now,
+                previousStatus = if (prev == Status.NONE) null else prev.name,
+                newStatus = newStatus.name,
+                comment = visitComment,
+                eventType = if (isCorrection) EventType.CORRECTION.name else EventType.VISIT.name,
             )
+            val id = historyDao.insert(record)
+            VisitUndo(record.copy(id = id), apt.lastVisitAt)
         }
+
+    /** Отменяем только последнюю отметку, сохраняя остальные поля и прежнюю дату обхода. */
+    suspend fun undoVisit(undo: VisitUndo): Boolean = db.withTransactionCompat {
+        val record = undo.record
+        val apt = apartmentDao.getById(record.apartmentId) ?: return@withTransactionCompat false
+        val latest = historyDao.latestRecordedVisit(apt.id)
+        if (apt.deletedAt != null || latest == null || latest.id != record.id || latest.uuid != record.uuid ||
+            apt.status != record.newStatus || apt.lastVisitAt != record.visitDate
+        ) return@withTransactionCompat false
+        historyDao.deleteVisit(record.id, record.uuid)
+        apartmentDao.update(
+            apt.copy(
+                status = record.previousStatus ?: Status.NONE.name,
+                lastVisitAt = undo.previousVisitAt,
+                updatedAt = maxOf(System.currentTimeMillis(), apt.updatedAt + 1),
+            )
+        )
+        true
     }
 
     /** Сброс статуса: дата обхода и история сохраняются (пп. 7, 13, 14). */
     suspend fun resetStatus(apartmentId: Long) {
-        val now = System.currentTimeMillis()
-        val apt = apartmentDao.getById(apartmentId) ?: return
-        val prev = Status.valueOf(apt.status)
-        if (prev == Status.NONE) return
         db.withTransactionCompat {
+            val apt = apartmentDao.getById(apartmentId) ?: return@withTransactionCompat
+            val prev = Status.valueOf(apt.status)
+            if (apt.deletedAt != null || prev == Status.NONE) return@withTransactionCompat
+            val now = System.currentTimeMillis()
             apartmentDao.update(apt.copy(status = Status.NONE.name, updatedAt = now))
             historyDao.insert(
                 VisitHistoryEntity(
@@ -125,11 +148,10 @@ class EntranceRepository(private val db: AppDatabase) {
     }
 
     /** Заметка (телефон/комментарий) — не меняет статус и дату обхода (п. 8). */
-    suspend fun saveNote(apartmentId: Long, phone: String?, comment: String?) {
-        val apt = apartmentDao.getById(apartmentId) ?: return
+    suspend fun saveNote(apartmentId: Long, phone: String?, comment: String?): Boolean {
         val p = phone?.trim()?.takeIf { it.isNotEmpty() }
         val c = comment?.trim()?.takeIf { it.isNotEmpty() }
-        apartmentDao.update(apt.copy(phone = p, comment = c, updatedAt = System.currentTimeMillis()))
+        return apartmentDao.updateNote(apartmentId, p, c, System.currentTimeMillis()) == 1
     }
 
     /** Перемещение квартиры на другой этаж (п. 11). Возвращает ошибку или null. */
@@ -153,12 +175,11 @@ class EntranceRepository(private val db: AppDatabase) {
     }
 
     /** Восстановление удалённой квартиры на прежний этаж, если он существует (п. 12). */
-    suspend fun restoreApartment(apartmentId: Long): Boolean {
-        val apt = apartmentDao.getById(apartmentId) ?: return false
-        val floor = floorDao.getById(apt.floorId) ?: return false
-        if (apartmentDao.findActiveByNumber(floor.entranceId, apt.apartmentNumber) != null) return false
+    suspend fun restoreApartment(apartmentId: Long): Boolean = db.withTransactionCompat {
+        val deleted = apartmentDao.getDeletedDetails(apartmentId) ?: return@withTransactionCompat false
+        if (deleted.floorNumber == null || deleted.numberTaken) return@withTransactionCompat false
         apartmentDao.restore(apartmentId, System.currentTimeMillis())
-        return true
+        true
     }
 
     /** Редактирование подъезда: добавить/удалить этаж, изменить номер (п. 19). */
@@ -383,6 +404,11 @@ class EntranceRepository(private val db: AppDatabase) {
 }
 
 enum class MoveResult { OK, DUPLICATE, ERROR }
+
+class VisitUndo internal constructor(
+    internal val record: VisitHistoryEntity,
+    internal val previousVisitAt: Long?,
+)
 
 fun ApartmentEntity.toUi(floorNumber: Int, visitedIds: Set<Long>) = ApartmentUi(
     id = id,

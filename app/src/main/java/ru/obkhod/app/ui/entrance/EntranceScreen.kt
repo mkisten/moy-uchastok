@@ -31,6 +31,9 @@ import androidx.compose.material.icons.filled.MoveUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,16 +49,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import ru.obkhod.app.data.db.Status
 import ru.obkhod.app.data.repo.ApartmentUi
 import ru.obkhod.app.data.repo.FloorWithApartments
 import ru.obkhod.app.data.repo.Statistics
+import ru.obkhod.app.data.repo.VisitUndo
+import ru.obkhod.app.ui.apartment.statusLabel
 
 /** Фильтры квартир (п. 10 ТЗ). */
 enum class Filter(val label: String) {
     ALL("Все"), REPEAT("Повтор"), NOT_VISITED("Без обхода"),
     REFUSED("Отказ"), NO_ONE_HOME("Нет дома"), NON_RESIDENTIAL("Не жилая"),
-    ROUGH_REFUSED("Грубый отказ"), CHILD("Ребёнок"),
+    ROUGH_REFUSED("Грубый отказ"), CHILD("Ребёнок");
+
+    fun matches(apt: ApartmentUi): Boolean = when (this) {
+        ALL -> true
+        NOT_VISITED -> !apt.hasVisits
+        REPEAT -> apt.status == Status.REPEAT
+        REFUSED -> apt.status == Status.REFUSED
+        NO_ONE_HOME -> apt.status == Status.NO_ONE_HOME
+        NON_RESIDENTIAL -> apt.status == Status.NON_RESIDENTIAL
+        ROUGH_REFUSED -> apt.status == Status.ROUGH_REFUSED
+        CHILD -> apt.status == Status.CHILD
+    }
 }
 
 fun statusColor(status: Status): Color = when (status) {
@@ -88,7 +105,8 @@ fun EntranceScreen(
     statistics: Statistics,
     isPrivate: Boolean = false,
     onBack: () -> Unit,
-    onSetStatus: (Long, Status, Boolean) -> Unit,
+    onSetStatus: (Long, Status, (VisitUndo?) -> Unit) -> Unit,
+    onUndoVisit: (VisitUndo, (Boolean) -> Unit) -> Unit,
     onResetStatus: (Long) -> Unit,
     onSaveNote: (Long, String?, String?) -> Unit,
     onMove: (Long, Long, (String?) -> Unit) -> Unit,
@@ -102,7 +120,7 @@ fun EntranceScreen(
     onOpenInfo: (Long) -> Unit,
     onAddHouse: ((String, (String?) -> Unit) -> Unit)? = null,
 ) {
-    var filter by remember { mutableStateOf(Filter.ALL) }
+    var filter by rememberSaveable { mutableStateOf(Filter.ALL) }
     var actionFor by remember { mutableStateOf<ApartmentUi?>(null) }
     var longPressFor by remember { mutableStateOf<ApartmentUi?>(null) }
     var noteFor by remember { mutableStateOf<ApartmentUi?>(null) }
@@ -112,12 +130,47 @@ fun EntranceScreen(
     var removeFloorFor by remember { mutableStateOf<FloorWithApartments?>(null) }
     var pendingMove by remember { mutableStateOf<Pair<ApartmentUi, Long>?>(null) }
     var addHouseDialog by remember { mutableStateOf(false) }
-    var searchDialog by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    val query = searchQuery.trim()
+    val allApartments = scheme.flatMap { it.apartments }
+    val visibleFloors = scheme.map { floor ->
+        floor.copy(apartments = floor.apartments.filter { filter.matches(it) && it.label.contains(query, ignoreCase = true) })
+    }
+    val visibleCount = visibleFloors.sumOf { it.apartments.size }
     val drag = rememberDragState()
     // Snackbar с Undo при удалении (мягкое удаление позволяет вернуть квартиру)
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var visitMessage by remember { mutableStateOf<Job?>(null) }
+
+    fun recordVisit(apt: ApartmentUi, status: Status) {
+        actionFor = null
+        onSetStatus(apt.id, status) { undo ->
+            visitMessage?.cancel()
+            visitMessage = scope.launch {
+                if (undo == null) {
+                    snackbarHostState.showSnackbar("Не удалось записать визит")
+                    return@launch
+                }
+                val result = snackbarHostState.showSnackbar(
+                    message = "${if (isPrivate) "Дом" else "Квартира"} № ${apt.label} · ${statusLabel(status)}",
+                    actionLabel = "Отменить",
+                    duration = SnackbarDuration.Long,
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    onUndoVisit(undo) { restored ->
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (restored) "Отметка визита отменена" else "Отметка уже изменилась",
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -145,12 +198,16 @@ fun EntranceScreen(
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
                 },
                 actions = {
-                    if (isPrivate) {
-                        // Быстрый поиск дома по номеру (при большом количестве домов на улице)
-                        IconButton(onClick = { searchDialog = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "Найти дом")
-                        }
-                    } else {
+                    IconButton(onClick = {
+                        searchOpen = !searchOpen
+                        if (!searchOpen) searchQuery = ""
+                    }) {
+                        Icon(
+                            if (searchOpen) Icons.Default.Close else Icons.Default.Search,
+                            if (searchOpen) "Закрыть поиск" else if (isPrivate) "Найти дом" else "Найти квартиру",
+                        )
+                    }
+                    if (!isPrivate) {
                         IconButton(onClick = onEditEntrance) { Icon(Icons.Default.Edit, "Редактировать подъезд") }
                     }
                 },
@@ -160,7 +217,6 @@ fun EntranceScreen(
         Column(Modifier.fillMaxSize().padding(padding)) {
             // Сворачиваемая панель статистики и фильтров: максимум места для схемы (п. 21)
             var panelsExpanded by remember { mutableStateOf(false) }
-            val allApartments = scheme.flatMap { it.apartments }
             Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -171,11 +227,19 @@ fun EntranceScreen(
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f),
                         )
-                        if (filter != Filter.ALL) {
-                            TextButton(onClick = { filter = Filter.ALL }) { Text("Сбросить") }
-                        }
                         IconButton(onClick = { panelsExpanded = !panelsExpanded }) {
                             Icon(Icons.Default.FilterList, contentDescription = "Фильтры и статистика")
+                        }
+                    }
+                    if (filter != Filter.ALL) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "${filter.label} · ${allApartments.count(filter::matches)}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { filter = Filter.ALL }) { Text("Сбросить фильтр") }
                         }
                     }
                     androidx.compose.animation.AnimatedVisibility(visible = panelsExpanded) {
@@ -213,18 +277,7 @@ fun EntranceScreen(
                                     label = { Text("Все · ${allApartments.size}") },
                                 )
                                 Filter.entries.filter { it != Filter.ALL }.forEach { f ->
-                                    val count = allApartments.count { apt ->
-                                        when (f) {
-                                            Filter.REPEAT -> apt.status == Status.REPEAT
-                                            Filter.NOT_VISITED -> !apt.hasVisits
-                                            Filter.REFUSED -> apt.status == Status.REFUSED
-                                            Filter.NO_ONE_HOME -> apt.status == Status.NO_ONE_HOME
-                                            Filter.NON_RESIDENTIAL -> apt.status == Status.NON_RESIDENTIAL
-                                            Filter.ROUGH_REFUSED -> apt.status == Status.ROUGH_REFUSED
-                                            Filter.CHILD -> apt.status == Status.CHILD
-                                            Filter.ALL -> true
-                                        }
-                                    }
+                                    val count = allApartments.count(f::matches)
                                     FilterChip(
                                         selected = filter == f,
                                         onClick = { filter = f },
@@ -239,41 +292,44 @@ fun EntranceScreen(
 
             Spacer(Modifier.height(6.dp))
 
+            if (searchOpen) {
+                val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text(if (isPrivate) "Номер дома" else "Номер квартиры") },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { keyboard?.hide() }),
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, "Очистить номер") }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).focusRequester(focusRequester),
+                )
+                LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                if (query.isNotEmpty()) {
+                    Text(
+                        "Найдено: $visibleCount",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+
+            val noMatches = when {
+                visibleCount != 0 -> null
+                query.isNotEmpty() && filter != Filter.ALL -> "По этому номеру и фильтру ничего не найдено."
+                query.isNotEmpty() -> "По этому номеру ничего не найдено."
+                filter != Filter.ALL -> "Нет записей с этим статусом."
+                else -> null
+            }
             if (isPrivate) {
                 // Частный сектор: дома плитками по 4 в ряд, меньшие сверху, большие внизу
-                val houses = scheme.flatMap { it.apartments }
+                val visible = visibleFloors.flatMap { it.apartments }
                     .sortedWith(compareBy({ it.number }, { it.label }))
-                val visible = houses.filter { apt ->
-                    val byFilter = when (filter) {
-                        Filter.ALL -> true
-                        Filter.REPEAT -> apt.status == Status.REPEAT
-                        Filter.NOT_VISITED -> !apt.hasVisits
-                        Filter.REFUSED -> apt.status == Status.REFUSED
-                        Filter.NO_ONE_HOME -> apt.status == Status.NO_ONE_HOME
-                        Filter.NON_RESIDENTIAL -> apt.status == Status.NON_RESIDENTIAL
-                        Filter.ROUGH_REFUSED -> apt.status == Status.ROUGH_REFUSED
-                        Filter.CHILD -> apt.status == Status.CHILD
-                    }
-                    val bySearch = searchQuery.isBlank() ||
-                        apt.label.contains(searchQuery.trim(), ignoreCase = true)
-                    byFilter && bySearch
-                }
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    if (searchQuery.isNotBlank()) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Поиск: «${searchQuery.trim()}» — найдено ${visible.size}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = { searchQuery = "" }) { Text("Сбросить") }
-                        }
-                    }
                     androidx.compose.foundation.layout.FlowRow(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -290,7 +346,7 @@ fun EntranceScreen(
                     }
                     if (visible.isEmpty()) {
                         Text(
-                            "Домов пока нет. Нажмите «Добавить дом».",
+                            noMatches ?: "Домов пока нет. Нажмите «Добавить дом».",
                             modifier = Modifier.padding(16.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -302,27 +358,29 @@ fun EntranceScreen(
                 }
             } else {
                 // Схема этажей: последний этаж вверху (п. 6)
-                if (scheme.isEmpty()) {
+                if (noMatches != null || scheme.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("В подъезде нет этажей")
+                        Text(noMatches ?: "В подъезде нет этажей", modifier = Modifier.padding(16.dp))
                     }
                 } else {
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                        scheme.forEach { floor ->
-                            FloorRow(
-                                floor = floor,
-                                filter = filter,
-                                drag = drag,
-                                onTileTap = { actionFor = it },
-                                onTileLongPress = { longPressFor = it },
-                                onInfoTap = { onOpenInfo(it.id) },
-                                onRemoveFloor = { removeFloorFor = floor },
-                                onDropMove = { aptId, targetFloor ->
-                                    val apt = scheme.asSequence().flatMap { it.apartments.asSequence() }
-                                        .firstOrNull { it.id == aptId }
-                                    if (apt != null) pendingMove = apt to targetFloor
-                                },
-                            )
+                        val displayFloors = if (query.isEmpty()) visibleFloors else visibleFloors.filter { it.apartments.isNotEmpty() }
+                        displayFloors.forEach { floor ->
+                            key(floor.floor.id) {
+                                FloorRow(
+                                    floor = floor,
+                                    filter = filter,
+                                    drag = drag,
+                                    onTileTap = { actionFor = it },
+                                    onTileLongPress = { longPressFor = it },
+                                    onInfoTap = { onOpenInfo(it.id) },
+                                    onRemoveFloor = { removeFloorFor = scheme.firstOrNull { it.floor.id == floor.floor.id } },
+                                    onDropMove = { aptId, targetFloor ->
+                                        val apt = allApartments.firstOrNull { it.id == aptId }
+                                        if (apt != null) pendingMove = apt to targetFloor
+                                    },
+                                )
+                            }
                         }
                         // Добавить этаж (п. 19)
                         TextButton(onClick = { onAddFloor(4) }, modifier = Modifier.padding(12.dp)) {
@@ -333,30 +391,6 @@ fun EntranceScreen(
                 }
             }
         }
-    }
-
-    // Диалог быстрого поиска дома по номеру
-    if (searchDialog) {
-        AlertDialog(
-            onDismissRequest = { searchDialog = false },
-            title = { Text("Найти дом") },
-            text = {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Номер дома") },
-                    supportingText = { Text("Например: 25 или 25А") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { searchDialog = false }) { Text("Найти") }
-            },
-            dismissButton = {
-                TextButton(onClick = { searchQuery = ""; searchDialog = false }) { Text("Очистить") }
-            },
-        )
     }
 
     // Диалог добавления дома (частный сектор)
@@ -445,22 +479,22 @@ fun EntranceScreen(
                     StatusCard(
                         label = "Отказ", color = statusColor(Status.REFUSED), contentColor = Color(0xFF37474F),
                         modifier = Modifier.weight(1f),
-                    ) { onSetStatus(apt.id, Status.REFUSED, false); actionFor = null }
+                    ) { recordVisit(apt, Status.REFUSED) }
                     StatusCard(
                         label = "Нет дома", color = statusColor(Status.NO_ONE_HOME), contentColor = Color(0xFF37474F),
                         modifier = Modifier.weight(1f),
-                    ) { onSetStatus(apt.id, Status.NO_ONE_HOME, false); actionFor = null }
+                    ) { recordVisit(apt, Status.NO_ONE_HOME) }
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatusCard(
                         label = "Повтор", color = statusColor(Status.REPEAT), contentColor = Color(0xFF37474F),
                         modifier = Modifier.weight(1f),
-                    ) { onSetStatus(apt.id, Status.REPEAT, false); actionFor = null }
+                    ) { recordVisit(apt, Status.REPEAT) }
                     StatusCard(
                         label = "Не жилая", color = statusColor(Status.NON_RESIDENTIAL), contentColor = Color(0xFF37474F),
                         modifier = Modifier.weight(1f),
-                    ) { onSetStatus(apt.id, Status.NON_RESIDENTIAL, false); actionFor = null }
+                    ) { recordVisit(apt, Status.NON_RESIDENTIAL) }
                 }
                 Spacer(Modifier.height(10.dp))
                 // Грубый отказ (ярко-красный) и Ребёнок (голубой со значком) — в одном ряду
@@ -468,12 +502,12 @@ fun EntranceScreen(
                     StatusCard(
                         label = "Грубый отказ", color = Color(0xFFE53935), contentColor = Color.White,
                         modifier = Modifier.weight(1f),
-                    ) { onSetStatus(apt.id, Status.ROUGH_REFUSED, false); actionFor = null }
+                    ) { recordVisit(apt, Status.ROUGH_REFUSED) }
                     StatusCard(
                         label = "Ребенок один дома", color = statusColor(Status.CHILD), contentColor = Color(0xFF0D47A1),
                         icon = Icons.Default.ChildCare,
                         modifier = Modifier.weight(1f),
-                    ) { onSetStatus(apt.id, Status.CHILD, false); actionFor = null }
+                    ) { recordVisit(apt, Status.CHILD) }
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -648,18 +682,10 @@ private fun FloorRow(
     onRemoveFloor: () -> Unit,
     onDropMove: (Long, Long) -> Unit,
 ) {
-    fun passes(apt: ApartmentUi): Boolean = when (filter) {
-        Filter.ALL -> true
-        Filter.REPEAT -> apt.status == Status.REPEAT
-        Filter.NOT_VISITED -> !apt.hasVisits
-        Filter.REFUSED -> apt.status == Status.REFUSED
-        Filter.NO_ONE_HOME -> apt.status == Status.NO_ONE_HOME
-        Filter.NON_RESIDENTIAL -> apt.status == Status.NON_RESIDENTIAL
-        Filter.ROUGH_REFUSED -> apt.status == Status.ROUGH_REFUSED
-        Filter.CHILD -> apt.status == Status.CHILD
-    }
-
     val hovered = drag.hoverFloorId == floor.floor.id && drag.draggingId != null
+    DisposableEffect(drag, floor.floor.id) {
+        onDispose { drag.floorBounds.remove(floor.floor.id) }
+    }
 
     Row(
         Modifier
@@ -683,7 +709,7 @@ private fun FloorRow(
         }
         // Горизонтальный скролл при большом количестве квартир (п. 6)
         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            val visible = floor.apartments.filter { passes(it) }
+            val visible = floor.apartments
             if (visible.isEmpty()) {
                 Text(
                     if (filter == Filter.ALL && floor.apartments.isEmpty()) "квартир нет"

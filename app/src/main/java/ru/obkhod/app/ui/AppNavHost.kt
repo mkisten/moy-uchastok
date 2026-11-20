@@ -53,7 +53,7 @@ fun AppNavHost(
             // Тихая автосинхронизация с Яндекс Диском при запуске (если подключён)
             LaunchedEffect(Unit) {
                 val prefs = app.getSharedPreferences("yandex_sync", Context.MODE_PRIVATE)
-                if (prefs.getString("login", null) != null) {
+                if (prefs.getString("login", null) != null && !ru.obkhod.app.sync.TeamConnectionStore.exists(app)) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         try {
                             // OAuth-токен, если есть; иначе пароль приложения
@@ -167,7 +167,8 @@ fun AppNavHost(
                 statistics = stats,
                 isPrivate = isPrivate,
                 onBack = { nav.popBackStack() },
-                onSetStatus = { id, status, corr -> vm.setStatus(id, status, corr) },
+                onSetStatus = { id, status, onResult -> vm.setStatus(id, status, onResult) },
+                onUndoVisit = { undo, onResult -> vm.undoVisit(undo, onResult) },
                 onResetStatus = { vm.resetStatus(it) },
                 onSaveNote = { id, phone, comment -> vm.saveNote(id, phone, comment) },
                 onOpenHistory = { historyForId = it },
@@ -199,7 +200,7 @@ fun AppNavHost(
                         history = infoHistory,
                         isPrivate = isPrivate,
                         onDismiss = { infoForId = null },
-                        onSaveNote = { phone, comment -> vm.saveNote(id, phone, comment) },
+                        onSaveNote = { phone, comment, onResult -> vm.saveNote(id, phone, comment, onResult) },
                     )
                 }
             }
@@ -269,7 +270,7 @@ fun AppNavHost(
             )
         }
         composable(Routes.CLOUD) {
-            ru.obkhod.app.ui.cloud.CloudSyncScreen(onBack = { nav.popBackStack() })
+            ru.obkhod.app.ui.cloud.TeamSyncScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.YANDEX) {
             ru.obkhod.app.ui.cloud.YandexSyncScreen(onBack = { nav.popBackStack() })

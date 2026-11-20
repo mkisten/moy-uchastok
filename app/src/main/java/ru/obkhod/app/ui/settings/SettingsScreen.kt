@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ru.obkhod.app.backup.BackupManager
@@ -24,8 +25,11 @@ import ru.obkhod.app.data.db.AppDatabase
 import ru.obkhod.app.export.CsvExporter
 import ru.obkhod.app.export.ExcelExporter
 import ru.obkhod.app.export.ExportDataLoader
+import ru.obkhod.app.sync.TeamConnectionStore
 import ru.obkhod.app.ui.AppContainer
-import ru.obkhod.app.ui.Routes
+import ru.obkhod.app.ui.backup.RestoreDialogs
+import ru.obkhod.app.ui.backup.RestoreViewModel
+import ru.obkhod.app.ui.viewModelFactory
 
 /**
  * Раздел «Экспорт и резервное копирование» + настройки (пп. 16–18, 20 ТЗ).
@@ -35,12 +39,15 @@ import ru.obkhod.app.ui.Routes
 @Composable
 fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: () -> Unit = {}, onOpenYandex: () -> Unit = {}) {
     val context = LocalContext.current
+    val teamConnected = TeamConnectionStore.exists(context)
     val scope = rememberCoroutineScope()
     val themeSettings by ru.obkhod.app.ui.theme.ThemePrefs.flow(context)
         .collectAsState(initial = ru.obkhod.app.ui.theme.ThemeSettings())
     var status by remember { mutableStateOf<String?>(null) }
-    var showRestoreConfirm by remember { mutableStateOf(false) }
-    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
+    val restoreVm: RestoreViewModel = viewModel(factory = viewModelFactory {
+        RestoreViewModel(context.applicationContext as android.app.Application)
+    })
+    LaunchedEffect(restoreVm) { restoreVm.refreshSafetyCopy() }
     var showClearConfirm by remember { mutableStateOf(false) }
 
     // --- SAF-лаунчеры ---
@@ -64,9 +71,8 @@ fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: 
             }
         }
     }
-    val openBackup = rememberOpenDocument("application/zip", "application/octet-stream") { uri ->
-        pendingRestoreUri = uri
-        showRestoreConfirm = true
+    val openBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(restoreVm::prepareZip)
     }
 
     Scaffold(
@@ -106,19 +112,27 @@ fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: 
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Создать резервную копию") }
-            Button(onClick = { openBackup.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { openBackup.launch(arrayOf("*/*")) }, enabled = !teamConnected, modifier = Modifier.fillMaxWidth()) {
                 Text("Восстановить из резервной копии")
+            }
+            if (restoreVm.hasSafetyCopy && !teamConnected) {
+                OutlinedButton(onClick = restoreVm::prepareSafetyCopy, modifier = Modifier.fillMaxWidth()) {
+                    Text("Вернуть данные до восстановления")
+                }
             }
 
             HorizontalDivider()
             Text("Настройки", style = MaterialTheme.typography.titleMedium)
 
-            // Совместный доступ: Яндекс Диск (простой вход) и Google Таблица
-            Button(onClick = onOpenYandex, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = onOpenCloud, modifier = Modifier.fillMaxWidth()) {
+                Text("Синхронизация команды")
+            }
+            OutlinedButton(onClick = onOpenYandex, enabled = !teamConnected, modifier = Modifier.fillMaxWidth()) {
                 Text("Синхронизация (Яндекс Диск)")
             }
-            OutlinedButton(onClick = onOpenCloud, modifier = Modifier.fillMaxWidth()) {
-                Text("Синхронизация (Google Таблица)")
+            if (teamConnected) {
+                Text("Отключите команду, чтобы восстановить копию, очистить базу или использовать Яндекс Диск.",
+                    style = MaterialTheme.typography.bodySmall)
             }
             Text("Тема", style = MaterialTheme.typography.titleMedium)
 
@@ -199,6 +213,7 @@ fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: 
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = { showClearConfirm = true },
+                enabled = !teamConnected,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
             ) { Text("Очистить все данные") }
@@ -210,33 +225,7 @@ fun SettingsScreen(onBack: () -> Unit, exportAreaId: Long? = null, onOpenCloud: 
     }
 
     // Предупреждение перед восстановлением (п. 18)
-    if (showRestoreConfirm) {
-        AlertDialog(
-            onDismissRequest = { showRestoreConfirm = false; pendingRestoreUri = null },
-            title = { Text("Восстановление") },
-            text = { Text("Восстановление заменит текущие данные приложения. Перед восстановлением будет создана временная резервная копия. Продолжить?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showRestoreConfirm = false
-                    val uri = pendingRestoreUri
-                    pendingRestoreUri = null
-                    if (uri != null) {
-                        scope.launch(Dispatchers.IO) {
-                            val manager = BackupManager(context, AppDatabase.get(context))
-                            val result = manager.restoreFrom(uri)
-                            withContextMain {
-                                status = when (result) {
-                                    is BackupManager.RestoreResult.Success -> "Данные восстановлены"
-                                    is BackupManager.RestoreResult.Error -> result.message
-                                }
-                            }
-                        }
-                    }
-                }) { Text("Продолжить") }
-            },
-            dismissButton = { TextButton(onClick = { showRestoreConfirm = false; pendingRestoreUri = null }) { Text("Отмена") } },
-        )
-    }
+    RestoreDialogs(restoreVm)
 
     // Подтверждение очистки данных (п. 20)
     if (showClearConfirm) {
@@ -287,7 +276,3 @@ private fun withContextMain(block: () -> Unit) {
 @Composable
 private fun rememberCreateDocument(mime: String, onResult: (Uri) -> Unit) =
     rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(mime)) { uri -> uri?.let(onResult) }
-
-@Composable
-private fun rememberOpenDocument(vararg mimes: String, onResult: (Uri) -> Unit) =
-    rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(onResult) }
